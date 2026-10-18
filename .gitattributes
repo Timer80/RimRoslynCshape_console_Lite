@@ -1,0 +1,9 @@
+# 统一按 LF 存储与检出（本仓库既有约定是 LF、无 BOM）
+* text=auto eol=lf
+
+# 二进制文件不做行尾/编码转换
+*.png binary
+*.jpg binary
+*.dll binary
+*.pdb binary
+*.zip binary

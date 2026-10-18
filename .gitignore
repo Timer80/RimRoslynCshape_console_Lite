@@ -1,0 +1,24 @@
+# ---- 构建产物 ----
+bin/
+obj/
+1.7/Assemblies/
+
+# ---- 代理/SDD 工作区（不属于 mod 本体）----
+.superpowers/
+
+# ---- 调查期间的临时产物（根目录截图/脚本/日志）----
+# 注意：只用根级锚定（前导 /），以免误伤 Textures/ 下的 mod 贴图
+/*.png
+/*.py
+/*.log
+/*.err
+/*.bak
+
+# ---- 第三方 Roslyn 回滚备件（VERIFY-T9.md 记：已不再被引用）----
+staging/
+
+# ---- 编辑器 ----
+.vs/
+.idea/
+*.user
+*.suo

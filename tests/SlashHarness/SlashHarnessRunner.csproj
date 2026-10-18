@@ -1,0 +1,169 @@
+<Project>
+  <!--
+    中间目录必须在 Microsoft.Common.props 之前落定:BaseIntermediateOutputPath / MSBuildProjectExtensionsPath 一旦被
+    Microsoft.Common.props 定下(默认 obj\)就改不动了 —— 写在工程体里会被静默忽略(实测:会就地造出 tests\SlashHarness\obj\)。
+    所以本工程用显式 Sdk.props / Sdk.targets 导入,而不是 Sdk="..." 属性。
+    理由:让 tests\SlashHarness\obj 永不出现,也就不会与 SlashHarness.csproj(默认同样落 obj\)共用中间目录,
+    避开 docs/slash-fleet-rules.md §2.1 那类「共用中间目录互相踩」的事故。
+  -->
+  <PropertyGroup>
+    <BaseIntermediateOutputPath Condition="'$(BaseIntermediateOutputPath)' == ''">$(TEMP)\slashrunnerobj\</BaseIntermediateOutputPath>
+    <MSBuildProjectExtensionsPath Condition="'$(MSBuildProjectExtensionsPath)' == ''">$(BaseIntermediateOutputPath)</MSBuildProjectExtensionsPath>
+  </PropertyGroup>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+
+  <!--
+    SlashHarnessRunner —— Slash harness 的「自带载荷 Exe 跑手」(S11-5b)。
+
+    解决的实测问题:tests/SlashHarness/SlashHarness.csproj 的引用块沿用主工程语义(Private=false,不外带载荷),
+    于是「只引用 SlashHarness.dll 的临时跑手」在反射 GetTypes() 时会抛未捕获的 ReflectionTypeLoadException(进程崩),
+    每人不得不先手工把 Assembly-CSharp / UnityStubs / 0Harmony / Waylith* / Brutal* / Microsoft.CodeAnalysis* 摆到能解析的位置。
+    本工程把 Source\**\*.cs + tests\SlashHarness\**\*.cs 一起编进自己(link,不是 ProjectReference),
+    并把这些载荷以 Private=true 拷到输出目录,让「跑两遍全绿」成为一条命令。
+
+    XML 注释不能含连续两个减号,所以那条字面命令放在 _SlashRunnerUsage 属性里(下面的载荷报错也会回显它);
+    完整用法与退出码见 tests/SlashHarness/README.md 与 docs/slash-command-authoring.md §2.3。
+
+    形态选择(link vs ProjectReference)= 选 link,理由:
+      ① 全程只有 SlashHarnessRunner 一个程序集,从根上不存在「引用 SlashHarness.dll 但载荷摆不齐」的形态;
+      ② 不依赖 SlashHarness.csproj 的 OutputPath($(TEMP)\slashharness\)语义,也不会有跨程序集同名类型(CS0436)噪声;
+      ③ 一份 deps.json、一份载荷副本。
+    与 SlashHarness.csproj 的关系:RunnerMain.cs 已从后者的 **\*.cs glob 里 Exclude 掉 —— 加本跑手不会改变 SlashHarness.dll 的字节内容,
+    绑在纯净检出上的 harness 哈希不会因而作废。
+
+    载荷发现(不写死只在一台机器成立的绝对路径):
+      构建期 RimWorldDir = ① 显式 -p:RimWorldDir=<dir> ② $env:RIMWORLD_DIR ③ 仓库相对位置
+                          (本 csproj 在 <RimWorld>\Mods\RoslynProbe\tests\SlashHarness,向上四级即 <RimWorld> 根)。
+                          三者都拿不到 Assembly-CSharp.dll 时,本工程在编译前 <Error>(SLASH001..003) 响亮报错并给出处置。
+                          Harmony 另走一层:优先 workshop 真身 3.0.0(版本子目录由 Version.txt 推),影子副本 2.4.1 默认不参与。
+      运行期 见 RunnerMain.cs 的 AssemblyLoadContext.Default.Resolving(载荷根优先级:
+                          命令行载荷目录 > $env:RIMWORLD_DIR > 输出目录 > payload-root.txt)。
+
+    铁律:
+      * 输出只落仓库外($(TEMP)\slashrunner\)或 gitignore 覆盖的 obj\;绝不写 1.7\Assemblies\;
+      * 不动主工程,不改 SlashHarness.csproj(本工程自带引用块);
+      * 临时路径用已展开的 $(TEMP)(不要 %TEMP%,见 docs/slash-fleet-rules.md §7)。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>SlashHarnessRunner</AssemblyName>
+    <RootNamespace>RoslynProbe</RootNamespace>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <DebugType>portable</DebugType>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath Condition="'$(OutputPath)' == ''">$(TEMP)\slashrunner\</OutputPath>
+    <_SlashRunnerPayloadRootFile>payload-root.txt</_SlashRunnerPayloadRootFile>
+    <_SlashRunnerCompileHarmonyFile>payload-compile-harmony.txt</_SlashRunnerCompileHarmonyFile>
+    <_SlashRunnerUsage>dotnet run --project tests/SlashHarness/SlashHarnessRunner.csproj -- --twice</_SlashRunnerUsage>
+  </PropertyGroup>
+
+  <!--
+    载荷根(RimWorldDir)推导。绝不写死 C:\SteamLibrary\...:推导顺序 = 显式 -p: > $env:RIMWORLD_DIR > 仓库相对位置。
+    相对位置:$(MSBuildThisFileDirectory) = <RimWorld>\Mods\RoslynProbe\tests\SlashHarness\,向上四级 = <RimWorld>\。
+
+    Harmony 载荷:要的是**真身**(workshop 的 3.0.0),不是 Mods\2009463077\Current 下的影子副本(2.4.1)。
+    所以这里按「分层发现」找真身,既不写死 Steam 库路径、也不写死版本子目录:
+      ① -p:HarmonyPayloadDir=<dir>(显式);
+      ② <Steam 库>\workshop\content\294100\<发布号>\<版本>\Assemblies(<RimWorldDir> 同级 steamapps 下的 workshop);
+      ③ <RimWorldDir>Mods\<发布号>\<版本>\Assemblies(本地安装形态);
+      ④ 另一种库布局:RimWorldDir\..\..\..\workshop\...。
+      「版本」子目录名从游戏自己的 <RimWorldDir>Version.txt 推(1.7.4979 rev109 ⇒ 1.7)——本 mod 的 LoadFolders.xml
+      对 <v1.7> 给出的目录也正是 1.7;/ 这一项对应 mod 根(本 mod 根下没有 Assemblies)。
+      影子副本只在 -p:SLASH_RUNNER_ALLOW_SHADOW_HARMONY=true 时作为最后兜底参与(见 docs/slash-fleet-rules.md §10)。
+  -->
+  <PropertyGroup>
+    <_SlashRunnerRimWorldFromRepo>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)..\..\..\..'))</_SlashRunnerRimWorldFromRepo>
+    <RimWorldDir Condition="'$(RimWorldDir)' != ''">$([MSBuild]::NormalizeDirectory('$(RimWorldDir)'))</RimWorldDir>
+    <RimWorldDir Condition="'$(RimWorldDir)' == '' And '$(RIMWORLD_DIR)' != ''">$([MSBuild]::NormalizeDirectory('$(RIMWORLD_DIR)'))</RimWorldDir>
+    <RimWorldDir Condition="'$(RimWorldDir)' == ''">$(_SlashRunnerRimWorldFromRepo)</RimWorldDir>
+    <RoslynPayloadDir>$([MSBuild]::NormalizeDirectory('$(RimWorldDir)Mods\Roslyn\Roslyn'))</RoslynPayloadDir>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Harmony 真身的分层发现(见上):版本子目录来自游戏自己的 Version.txt,读不到就退回 1.7。 -->
+    <_SlashRunnerHarmonyModId Condition="'$(_SlashRunnerHarmonyModId)' == ''">2009463077</_SlashRunnerHarmonyModId>
+    <_SlashRunnerVersionTxt>$(RimWorldDir)Version.txt</_SlashRunnerVersionTxt>
+    <_SlashRunnerGameVersion Condition="'$(_SlashRunnerGameVersion)' == '' And Exists('$(_SlashRunnerVersionTxt)')">$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(_SlashRunnerVersionTxt)')), '^[0-9]+\.[0-9]+').Value)</_SlashRunnerGameVersion>
+    <_SlashRunnerGameVersion Condition="'$(_SlashRunnerGameVersion)' == ''">1.7</_SlashRunnerGameVersion>
+    <_SlashRunnerHarmonyReal1>$([MSBuild]::NormalizeDirectory('$(RimWorldDir)..\..\workshop\content\294100\$(_SlashRunnerHarmonyModId)\\$(_SlashRunnerGameVersion)\Assemblies'))</_SlashRunnerHarmonyReal1>
+    <_SlashRunnerHarmonyReal2>$([MSBuild]::NormalizeDirectory('$(RimWorldDir)Mods\$(_SlashRunnerHarmonyModId)\\$(_SlashRunnerGameVersion)\Assemblies'))</_SlashRunnerHarmonyReal2>
+    <_SlashRunnerHarmonyReal3>$([MSBuild]::NormalizeDirectory('$(RimWorldDir)..\..\..\workshop\content\294100\$(_SlashRunnerHarmonyModId)\\$(_SlashRunnerGameVersion)\Assemblies'))</_SlashRunnerHarmonyReal3>
+    <_SlashRunnerHarmonyShadow>$([MSBuild]::NormalizeDirectory('$(RimWorldDir)Mods\$(_SlashRunnerHarmonyModId)\Current\Assemblies'))</_SlashRunnerHarmonyShadow>
+    <HarmonyPayloadDir Condition="'$(HarmonyPayloadDir)' != ''">$([MSBuild]::NormalizeDirectory('$(HarmonyPayloadDir)'))</HarmonyPayloadDir>
+    <HarmonyPayloadDir Condition="'$(HarmonyPayloadDir)' == '' And Exists('$(_SlashRunnerHarmonyReal1)0Harmony.dll')">$(_SlashRunnerHarmonyReal1)</HarmonyPayloadDir>
+    <HarmonyPayloadDir Condition="'$(HarmonyPayloadDir)' == '' And Exists('$(_SlashRunnerHarmonyReal2)0Harmony.dll')">$(_SlashRunnerHarmonyReal2)</HarmonyPayloadDir>
+    <HarmonyPayloadDir Condition="'$(HarmonyPayloadDir)' == '' And Exists('$(_SlashRunnerHarmonyReal3)0Harmony.dll')">$(_SlashRunnerHarmonyReal3)</HarmonyPayloadDir>
+    <HarmonyPayloadDir Condition="'$(HarmonyPayloadDir)' == '' And '$(SLASH_RUNNER_ALLOW_SHADOW_HARMONY)' == 'true' And Exists('$(_SlashRunnerHarmonyShadow)0Harmony.dll')">$(_SlashRunnerHarmonyShadow)</HarmonyPayloadDir>
+  </PropertyGroup>
+
+  <!-- 编译前把「载荷发现失败」变成响亮报错,而不是 ResolveAssemblyReferences 的一串 MSB3245 警告。 -->
+  <Target Name="SlashRunnerValidatePayloads" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(RimWorldDir)Assembly-CSharp.dll')" Code="SLASH001"
+           Text="SlashHarnessRunner: 载荷发现失败 —— 在 '$(RimWorldDir)' 找不到 Assembly-CSharp.dll。RimWorldDir 推导顺序: (1) 显式 -p:RimWorldDir=&lt;dir&gt; (2) 环境变量 RIMWORLD_DIR (3) 仓库相对位置 '$(_SlashRunnerRimWorldFromRepo)'。处置: set RIMWORLD_DIR=&lt;RimWorld 根&gt; 或 -p:RimWorldDir=&lt;RimWorld 根&gt; 后重跑。跑手用法: $(_SlashRunnerUsage)(详见 tests/SlashHarness/README.md)。" />
+    <Error Condition="!Exists('$(HarmonyPayloadDir)0Harmony.dll')" Code="SLASH002"
+           Text="SlashHarnessRunner: 找不到 **真身** 0Harmony.dll(版本子目录 '$(_SlashRunnerGameVersion)',发布号 $(_SlashRunnerHarmonyModId))。试过: (1) '$(_SlashRunnerHarmonyReal1)' (2) '$(_SlashRunnerHarmonyReal2)' (3) '$(_SlashRunnerHarmonyReal3)'。处置: 用 -p:HarmonyPayloadDir=&lt;含 0Harmony.dll 的目录&gt; 显式指定真身,或 -p:_SlashRunnerGameVersion=&lt;版本目录&gt;;影子副本 '$(RimWorldDir)Mods\$(_SlashRunnerHarmonyModId)\Current\Assemblies'(2.4.1,规则 §10)默认**不参与**,确实要用才加 -p:SLASH_RUNNER_ALLOW_SHADOW_HARMONY=true。" />
+    <Error Condition="!Exists('$(RoslynPayloadDir)Microsoft.CodeAnalysis.dll')" Code="SLASH003"
+           Text="SlashHarnessRunner: 在 '$(RoslynPayloadDir)' 找不到 Microsoft.CodeAnalysis.dll(根 = $(RimWorldDir))。处置: 确认 Roslyn mod 的载荷目录在位,或用 -p:RimWorldDir=&lt;RimWorld 根&gt; 指对根目录。" />
+  </Target>
+
+  <!--
+    -restore:false 的资产文件兜底(与 SlashHarness.csproj 同款):本工程与主工程同 TFM(net10.0)、同为零 PackageReference、
+    同为零 ProjectReference,故自己的中间目录没有 project.assets.json 时直接复用主工程已还原的那份。
+    (ProjectAssetsFile 的 SDK 默认值在 .targets 阶段才赋,工程体里 '$(ProjectAssetsFile)' 必为空。)
+  -->
+  <PropertyGroup>
+    <_SlashRunnerFallbackAssets>$(MSBuildThisFileDirectory)..\..\Source\obj\project.assets.json</_SlashRunnerFallbackAssets>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(ProjectAssetsFile)' == '' And !Exists('$(BaseIntermediateOutputPath)project.assets.json') And Exists('$(_SlashRunnerFallbackAssets)')">
+    <ProjectAssetsFile>$(_SlashRunnerFallbackAssets)</ProjectAssetsFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- link 形态:主工程全集 + 本目录(测试类 + SlashTestHarness + RunnerMain)一起编进本程序集,不引用 SlashHarness.dll。 -->
+    <Compile Include="..\..\Source\**\*.cs" Exclude="..\..\Source\obj\**\*.cs;..\..\Source\bin\**\*.cs" />
+    <Compile Include="**\*.cs" Exclude="obj\**\*.cs;bin\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      载荷引用:不写死绝对路径,全部从 $(RimWorldDir) 派生(见上)。
+      Private=true 的四个组 = 直接外带(游戏三件 + CodeAnalysis 四件):这正是「自带载荷」的部分;
+      其余 System.* 六件保持 Private=false —— 它们都在 Microsoft.NETCore.App 里,运行期由共享框架按简单名绑定,
+      把游戏载荷目录里的旧副本拷进输出反而可能制造类型身份冲突。
+      游戏侧的传递依赖(Waylith* / Brutal* / RimWorld / steamworks 等)不逐一枚举,由 RunnerMain.cs 的
+      AssemblyLoadContext.Default.Resolving 从同一批载荷根按名字解析,未命中会往 stderr 打印 [载荷未命中]。
+    -->
+    <Reference Include="UnityStubs"><HintPath>$(RimWorldDir)UnityStubs.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="Assembly-CSharp"><HintPath>$(RimWorldDir)Assembly-CSharp.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="0Harmony"><HintPath>$(HarmonyPayloadDir)0Harmony.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="Microsoft.CodeAnalysis"><HintPath>$(RoslynPayloadDir)Microsoft.CodeAnalysis.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="Microsoft.CodeAnalysis.CSharp"><HintPath>$(RoslynPayloadDir)Microsoft.CodeAnalysis.CSharp.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="Microsoft.CodeAnalysis.Scripting"><HintPath>$(RoslynPayloadDir)Microsoft.CodeAnalysis.Scripting.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="Microsoft.CodeAnalysis.CSharp.Scripting"><HintPath>$(RoslynPayloadDir)Microsoft.CodeAnalysis.CSharp.Scripting.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="System.Collections.Immutable"><HintPath>$(RoslynPayloadDir)System.Collections.Immutable.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="System.Memory"><HintPath>$(RoslynPayloadDir)System.Memory.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="System.Numerics.Vectors"><HintPath>$(RoslynPayloadDir)System.Numerics.Vectors.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="System.Reflection.Metadata"><HintPath>$(RoslynPayloadDir)System.Reflection.Metadata.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe"><HintPath>$(RoslynPayloadDir)System.Runtime.CompilerServices.Unsafe.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="System.Threading.Tasks.Extensions"><HintPath>$(RoslynPayloadDir)System.Threading.Tasks.Extensions.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <!--
+    把构建期解析到的 RimWorldDir 写进输出目录的 payload-root.txt:输出目录在 $(TEMP),运行期无法从它反推仓库位置,
+    而 Waylith*/Brutal* 这些没被外带的传递依赖要按名字从同一个根解析。
+    AfterTargets=Build,所以每次 Build(含 dotnet run 的隐式构建)都会补写;WriteOnlyWhenDifferent 避免无谓改写。
+  -->
+  <Target Name="SlashRunnerWritePayloadRoot" AfterTargets="Build">
+    <WriteLinesToFile File="$(OutputPath)$(_SlashRunnerPayloadRootFile)" Lines="$(RimWorldDir)"
+                      Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <!-- 记下编译面用的 0Harmony.dll:跑手启动时拿它与运行面解析到的那份比 SHA256,不一致就响亮报错(防「编译面≠运行面」复活)。 -->
+    <WriteLinesToFile File="$(OutputPath)$(_SlashRunnerCompileHarmonyFile)" Lines="$(HarmonyPayloadDir)0Harmony.dll"
+                      Overwrite="true" WriteOnlyWhenDifferent="true" />
+  </Target>
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+</Project>
