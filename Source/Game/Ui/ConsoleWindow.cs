@@ -90,7 +90,12 @@ namespace RoslynProbe
             closeOnCancel = true;
             draggable = true;
             resizeable = true;
-            absorbInputAroundWindow = true;
+            // 对齐原版日志窗口（LudeonTK.EditWindow_Log 保持基类默认 false）：窗口外的点击/按键不吞，
+            // 交给下层 UI —— 控制台开着时仍能点到工具栏图标与菜单按钮。WindowStack.GetsInput 按栈内
+            // 第一个 absorb=true 的窗口截断输入，true 会把所有窗口外 mouseDown/keyDown 当场 Use 掉。
+            // 点外面不关窗（closeOnClickedOutside 保持默认 false）；输入框打字仍安全：字母键先被
+            // TextArea.Use() 置 used，原版 KeyBindingDef.KeyDownEvent 对 used 事件不触发。
+            absorbInputAroundWindow = false;
             preventCameraMotion = false; // 主菜单下没有相机/地图
             forcePause = false;
         }
