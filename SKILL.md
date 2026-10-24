@@ -22,7 +22,7 @@ description: 当要用 RoslynProbe 控制台（RimWorld 1.7 mod 的 C# 求值加
 | `-quicktest` | 跳过主菜单直接开一张随机开发者地图 | 要等地图真正就绪（`Find.CurrentMap` 非空）；加载途中别再调开图接口，否则游戏会卡在半初始化状态 |
 | `-NoWindow` | 窗口隐藏、桌面零打扰（渲染照常） | 要看画面就去掉它 |
 | `-NoCrashDialog` | 崩溃不弹对话框 | 自动化常用 |
-| `-savedatafolder=<新目录>` | 存档目录重定向 | **ModsConfig 会一起被隔离**：新目录首次启动写的是只含原版 DLC 的默认配置，你的 mod 不在里面 ⇒ mod 不加载、管道根本不存在。启动前先把带自己 mod 的 `Config/ModsConfig.xml` 写进该目录 |
+| `-savedatafolder=<新目录>` | 存档目录重定向 | **ModsConfig 会一起被隔离**：新目录首次启动写的是只含原版 DLC 的默认配置，你的 mod 与前置都不在里面 ⇒ mod 不加载、管道根本不存在。启动前先把 `Config/ModsConfig.xml` 预写进该目录，`activeMods` **前置与核心一个都不能少**：`brrainz.harmony`、`ue.roslyn`、`ludeon.rimworld` + 各 DLC、本 mod `skylon.rimroslyncshape_console.lite`（全小写）——照抄本机正常配置最稳。另：隔离目录被反复强杀后可能卡启动（主循环不响应、求值全超时），删目录重建配置再启 |
 
 ## 自动化
 
@@ -52,7 +52,7 @@ $p=[IO.Pipes.NamedPipeClientStream]::new('.','roslyn-console-短名',[IO.Pipes.P
 
 ## 常见失败
 
-- **连不上**：先确认 mod 真的加载了 —— `-savedatafolder` 的 ModsConfig 坑最常见；再用 `/log` 看管道是否启动、名字与预期是否一致。
+- **连不上**：先确认 mod 真的加载了 —— `-savedatafolder` 的 ModsConfig 坑最常见（前置/核心没写全，见上表）；再用 `/log` 看管道是否启动、名字与预期是否一致。
 - **求值全超时**：游戏线程被占住（还在加载，或已被搞成半初始化状态），不是客户端的问题。等加载结束；等不到就重启游戏。
 - **启错 mod**：同程序集名、不同 packageId 的两份目录很容易混，启动参数对、协议也对，但跑的是别人的代码。日志堆栈里的源码绝对路径能反证加载的是哪一份。
 
