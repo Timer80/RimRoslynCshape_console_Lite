@@ -83,7 +83,7 @@ namespace RoslynProbe
         {
             this.host = host;
             this.executor = executor;
-            optionalTitle = "RoslynProbe 控制台";
+            optionalTitle = ConsoleText.T("RoslynProbe.Console.Title", "RoslynProbe 控制台");
             doCloseX = true;
             doCloseButton = false;
             closeOnAccept = false;
@@ -218,7 +218,7 @@ namespace RoslynProbe
             if (list.Count == 0)
             {
                 GUI.color = ColDim;
-                GUI.Label(rect, "在此输入 C# 表达式。Enter 执行 / Shift+Enter 换行；求值进行中可继续入队。", monoLabel);
+                GUI.Label(rect, ConsoleText.T("RoslynProbe.Console.Stream.Hint", "在此输入 C# 表达式。Enter 执行 / Shift+Enter 换行；求值进行中可继续入队。"), monoLabel);
                 GUI.color = Color.white;
                 return;
             }
@@ -413,7 +413,7 @@ namespace RoslynProbe
             {
                 if (executor == null || host == null)
                 {
-                    ConsoleLog.SystemNote(SystemNoteText("console not wired"));
+                    ConsoleLog.SystemNote(SystemNoteText(ConsoleText.T("RoslynProbe.Console.Note.NotWired", "控制台未接线")));
                     return;
                 }
                 // 事实位(S11-3):通道 gui;Submit 跑在 OnGUI(游戏线程)⇒ IsGameThread=true。
@@ -422,7 +422,7 @@ namespace RoslynProbe
                 if (!SlashJson.TryDispatch(trimmed, host, executor, SlashCommands.ChannelGui, true,
                         out SlashResult slash))
                 {
-                    ConsoleLog.SystemNote(SystemNoteText("指令解析失败: " + trimmed));
+                    ConsoleLog.SystemNote(SystemNoteText(ConsoleText.Tf("RoslynProbe.Console.Note.SlashParseFailed", "指令解析失败: {0}", trimmed)));
                     return;
                 }
                 if (slash.Kind == "quit")
@@ -456,14 +456,14 @@ namespace RoslynProbe
 
             if (executor == null || host == null)
             {
-                ConsoleLog.SystemNote(SystemNoteText("console not wired"));
+                ConsoleLog.SystemNote(SystemNoteText(ConsoleText.T("RoslynProbe.Console.Note.NotWired", "控制台未接线")));
                 return;
             }
 
             // 决策 9：FIFO 排队不丢弃。PendingCount 是 GUI/HTTP 共用队列深度，上限 32 防粘贴失控。
             if (executor.PendingCount >= GuiMaxQueue)
             {
-                ConsoleLog.SystemNote(SystemNoteText("队列已满（" + GuiMaxQueue + "），本次未入队"));
+                ConsoleLog.SystemNote(SystemNoteText(ConsoleText.Tf("RoslynProbe.Console.Note.QueueFull", "队列已满（{0}），本次未入队", GuiMaxQueue)));
                 return; // 保留输入文字
             }
 
@@ -471,7 +471,7 @@ namespace RoslynProbe
             {
                 // Poisoned 时 Executor.Enqueue 会直接返回一个"已完成"的请求且**绝不执行 handler**
                 // （Executor.cs:25-36）。GUI 这条路径的 Begin 在闭包外，若照常建组就会永久 pending。
-                ConsoleLog.SystemNote(SystemNoteText("会话已失效（poisoned），本次未入队"));
+                ConsoleLog.SystemNote(SystemNoteText(ConsoleText.T("RoslynProbe.Console.Note.Poisoned", "会话已失效（poisoned），本次未入队")));
                 return; // 保留输入文字
             }
 
@@ -484,7 +484,7 @@ namespace RoslynProbe
             {
                 // 建组在闭包外：Enqueue 抛异常会让该组永远 pending，就地收口。
                 ConsoleLog.Complete(entryId, false, null, "enqueue failed: " + ex.Message, null);
-                ConsoleLog.SystemNote(SystemNoteText("入队失败：" + ex.Message));
+                ConsoleLog.SystemNote(SystemNoteText(ConsoleText.Tf("RoslynProbe.Console.Note.EnqueueFailed", "入队失败：{0}", ex.Message)));
                 return; // 保留输入文字
             }
 
@@ -524,14 +524,16 @@ namespace RoslynProbe
             ConsoleEntry e = CurrentDetailEntry();
             const float headerH = 20f;
 
-            string title = (lockedId >= 0 && e != null) ? ("详情 · 已锁定 #" + e.Id) : "详情 · 跟随最新";
+            string title = (lockedId >= 0 && e != null)
+                ? ConsoleText.Tf("RoslynProbe.Console.Detail.Locked", "详情 · 已锁定 #{0}", e.Id)
+                : ConsoleText.T("RoslynProbe.Console.Detail.Following", "详情 · 跟随最新");
             GUI.color = ColDim;
             GUI.Label(new Rect(rect.x + 8f, rect.y + 3f, rect.width - 100f, headerH), title, monoLabel);
             GUI.color = Color.white;
 
-            string body = e != null ? DetailText(e) : "（空）";
+            string body = e != null ? DetailText(e) : ConsoleText.T("RoslynProbe.Console.Detail.Empty", "（空）");
             Rect copyRect = new Rect(rect.xMax - 88f, rect.y + 3f, 56f, headerH);
-            if (e != null && Widgets.ButtonText(copyRect, "复制"))
+            if (e != null && Widgets.ButtonText(copyRect, ConsoleText.T("RoslynProbe.Console.Button.Copy", "复制")))
                 GUIUtility.systemCopyBuffer = body;
 
             Rect bodyRect = new Rect(rect.x + 4f, rect.y + headerH + 2f, rect.width - 8f, rect.height - headerH - 6f);
@@ -586,12 +588,12 @@ namespace RoslynProbe
         private void DrawTitle(Rect rect)
         {
             GUI.color = ColInput;
-            GUI.Label(new Rect(rect.x + 4f, rect.y + 5f, 260f, 20f), "RoslynProbe 控制台", monoLabel);
+            GUI.Label(new Rect(rect.x + 4f, rect.y + 5f, 260f, 20f), ConsoleText.T("RoslynProbe.Console.Title", "RoslynProbe 控制台"), monoLabel);
             GUI.color = Color.white;
 
             // 「重置」（会话）与「清空」（日志流）语义正交：重置只清变量/类型/usings，不动日志。
             Rect resetRect = new Rect(rect.xMax - 160f, rect.y + 5f, 56f, 20f);
-            if (Widgets.ButtonText(resetRect, "重置") && executor != null && host != null)
+            if (Widgets.ButtonText(resetRect, ConsoleText.T("RoslynProbe.Console.Button.Reset", "重置")) && executor != null && host != null)
             {
                 // 会话重置：清空 submission 链（变量/类/方法）并把 usings 重置回 DefaultUsings。
                 // 与 HTTP 时期的 /reset 同一条路径（当时在 Commands.cs，该文件随 T5 删除；
@@ -601,13 +603,13 @@ namespace RoslynProbe
                 {
                     host.Reset();                 // keepUsings 默认 false → usings 回 DefaultUsings
                     ConsoleLog.AbandonPending("reset");
-                    ConsoleLog.SystemNote(SystemNoteText(ResetNoteBody));
+                    ConsoleLog.SystemNote(SystemNoteText(ConsoleText.T("RoslynProbe.Console.Note.Reset", ResetNoteBody)));
                     return ReplResult.Success("reset");
                 }, 5000);
             }
 
             Rect clearRect = new Rect(rect.xMax - 100f, rect.y + 5f, 56f, 20f);
-            if (Widgets.ButtonText(clearRect, "清空"))
+            if (Widgets.ButtonText(clearRect, ConsoleText.T("RoslynProbe.Console.Button.Clear", "清空")))
             {
                 ConsoleLog.Clear();
                 lockedId = -1; // 缓冲没了，锁定对象消失 → 恢复跟随
@@ -628,12 +630,16 @@ namespace RoslynProbe
                 for (int i = 0; i < list.Count; i++)
                     if (list[i].Id == cur.Id) { rowN = i + 1; break; }
             }
-            string text = "rev " + (executor != null ? executor.Revision : 0)
-                + " · ticks " + (executor != null ? executor.TickCount : 0)
-                + " · 行 " + rowN + "/" + list.Count
-                + " · 缓冲 " + list.Count + "/" + ConsoleLog.MaxEntries
-                + (executor != null && executor.PendingCount > 0 ? " · 队列 " + executor.PendingCount : "")
-                + (lockedId >= 0 ? " · 已锁定" : " · 跟随");
+            string text = ConsoleText.Tf("RoslynProbe.Console.Status.Rev", "rev {0}", executor != null ? executor.Revision : 0)
+                + " · " + ConsoleText.Tf("RoslynProbe.Console.Status.Ticks", "ticks {0}", executor != null ? executor.TickCount : 0)
+                + " · " + ConsoleText.Tf("RoslynProbe.Console.Status.Row", "行 {0}/{1}", rowN, list.Count)
+                + " · " + ConsoleText.Tf("RoslynProbe.Console.Status.Buffer", "缓冲 {0}/{1}", list.Count, ConsoleLog.MaxEntries)
+                + (executor != null && executor.PendingCount > 0
+                    ? " · " + ConsoleText.Tf("RoslynProbe.Console.Status.Queue", "队列 {0}", executor.PendingCount)
+                    : "")
+                + " · " + (lockedId >= 0
+                    ? ConsoleText.T("RoslynProbe.Console.Status.Locked", "已锁定")
+                    : ConsoleText.T("RoslynProbe.Console.Status.Following", "跟随"));
             GUI.color = ColDim;
             GUI.Label(rect, text, monoLabel);
             GUI.color = Color.white;

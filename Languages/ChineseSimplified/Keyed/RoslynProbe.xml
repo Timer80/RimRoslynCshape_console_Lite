@@ -2,4 +2,24 @@
 <LanguageData>
   <!-- RoslynProbe GUI 控制台键值 -->
   <RoslynProbe.Console.Title>RoslynProbe 控制台</RoslynProbe.Console.Title>
+  <RoslynProbe.Console.Stream.Hint>在此输入 C# 表达式。Enter 执行 / Shift+Enter 换行；求值进行中可继续入队。</RoslynProbe.Console.Stream.Hint>
+  <RoslynProbe.Console.Note.Reset>会话已重置：变量 / 类型 / usings 已清空（日志保留；要清日志请点「清空」）</RoslynProbe.Console.Note.Reset>
+  <RoslynProbe.Console.Note.NotWired>控制台未接线</RoslynProbe.Console.Note.NotWired>
+  <RoslynProbe.Console.Note.SlashParseFailed>指令解析失败: {0}</RoslynProbe.Console.Note.SlashParseFailed>
+  <RoslynProbe.Console.Note.QueueFull>队列已满（{0}），本次未入队</RoslynProbe.Console.Note.QueueFull>
+  <RoslynProbe.Console.Note.Poisoned>会话已失效（poisoned），本次未入队</RoslynProbe.Console.Note.Poisoned>
+  <RoslynProbe.Console.Note.EnqueueFailed>入队失败：{0}</RoslynProbe.Console.Note.EnqueueFailed>
+  <RoslynProbe.Console.Detail.Locked>详情 · 已锁定 #{0}</RoslynProbe.Console.Detail.Locked>
+  <RoslynProbe.Console.Detail.Following>详情 · 跟随最新</RoslynProbe.Console.Detail.Following>
+  <RoslynProbe.Console.Detail.Empty>（空）</RoslynProbe.Console.Detail.Empty>
+  <RoslynProbe.Console.Button.Copy>复制</RoslynProbe.Console.Button.Copy>
+  <RoslynProbe.Console.Button.Reset>重置</RoslynProbe.Console.Button.Reset>
+  <RoslynProbe.Console.Button.Clear>清空</RoslynProbe.Console.Button.Clear>
+  <RoslynProbe.Console.Status.Rev>rev {0}</RoslynProbe.Console.Status.Rev>
+  <RoslynProbe.Console.Status.Ticks>ticks {0}</RoslynProbe.Console.Status.Ticks>
+  <RoslynProbe.Console.Status.Row>行 {0}/{1}</RoslynProbe.Console.Status.Row>
+  <RoslynProbe.Console.Status.Buffer>缓冲 {0}/{1}</RoslynProbe.Console.Status.Buffer>
+  <RoslynProbe.Console.Status.Queue>队列 {0}</RoslynProbe.Console.Status.Queue>
+  <RoslynProbe.Console.Status.Locked>已锁定</RoslynProbe.Console.Status.Locked>
+  <RoslynProbe.Console.Status.Following>跟随</RoslynProbe.Console.Status.Following>
 </LanguageData>

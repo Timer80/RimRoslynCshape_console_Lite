@@ -63,6 +63,16 @@ namespace RoslynProbe.Tests
                     Assert.True(kv.Value != "TODO", lang + " 的键 " + kv.Key + " 值是占位符 TODO");
         }
 
+        [Fact]
+        public void ConsoleWindow_Source_Keys_Are_Present_In_English_File()
+        {
+            var scanned = ScanKeys(Path.Combine(RepoRoot(), "Source", "Game", "Ui", "ConsoleWindow.cs"));
+            Assert.True(scanned.Count >= 21, "ConsoleWindow.cs 里键化调用不足 21 个，实际 " + scanned.Count);
+            var en = EntriesOf("English").Keys.ToHashSet();
+            var missing = scanned.Where(k => !en.Contains(k)).OrderBy(k => k).ToList();
+            Assert.True(missing.Count == 0, "源码用了但 English 文件没有的键: " + string.Join(", ", missing));
+        }
+
         private static HashSet<string> ScanKeys(string file)
         {
             Assert.True(File.Exists(file), "缺源文件: " + file);
