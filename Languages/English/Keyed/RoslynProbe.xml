@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+  <!-- RoslynProbe GUI 控制台键值（English = defaultLanguage 兜底，必须与其它语言键集一致） -->
+  <RoslynProbe.Console.Title>RoslynProbe Console</RoslynProbe.Console.Title>
+</LanguageData>
