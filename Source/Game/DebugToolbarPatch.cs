@@ -47,7 +47,7 @@ namespace RoslynProbe
 
                 bool clicked = row.ButtonIcon(
                     icon,
-                    "Toggle the RoslynProbe console.\n\nA live C# REPL for this session.",
+                    ConsoleText.T("RoslynProbe.Toolbar.Tooltip", "Toggle the RoslynProbe console.\n\nA live C# REPL for this session."),
                     GenUI.MouseoverColor);
 
                 if (clicked)

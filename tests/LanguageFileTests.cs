@@ -73,6 +73,16 @@ namespace RoslynProbe.Tests
             Assert.True(missing.Count == 0, "源码用了但 English 文件没有的键: " + string.Join(", ", missing));
         }
 
+        [Fact]
+        public void Toolbar_Source_Keys_Are_Present_In_English_File()
+        {
+            var scanned = ScanKeys(Path.Combine(RepoRoot(), "Source", "Game", "DebugToolbarPatch.cs"));
+            Assert.True(scanned.Count >= 1, "DebugToolbarPatch.cs 里键化调用不足 1 个，实际 " + scanned.Count);
+            var en = EntriesOf("English").Keys.ToHashSet();
+            var missing = scanned.Where(k => !en.Contains(k)).OrderBy(k => k).ToList();
+            Assert.True(missing.Count == 0, "源码用了但 English 文件没有的键: " + string.Join(", ", missing));
+        }
+
         private static HashSet<string> ScanKeys(string file)
         {
             Assert.True(File.Exists(file), "缺源文件: " + file);

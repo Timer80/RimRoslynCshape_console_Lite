@@ -22,4 +22,5 @@
   <RoslynProbe.Console.Status.Queue>queue {0}</RoslynProbe.Console.Status.Queue>
   <RoslynProbe.Console.Status.Locked>locked</RoslynProbe.Console.Status.Locked>
   <RoslynProbe.Console.Status.Following>following</RoslynProbe.Console.Status.Following>
+  <RoslynProbe.Toolbar.Tooltip>Toggle the RoslynProbe console.\n\nA live C# REPL for this session.</RoslynProbe.Toolbar.Tooltip>
 </LanguageData>

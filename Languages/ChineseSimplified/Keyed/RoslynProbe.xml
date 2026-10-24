@@ -22,4 +22,5 @@
   <RoslynProbe.Console.Status.Queue>队列 {0}</RoslynProbe.Console.Status.Queue>
   <RoslynProbe.Console.Status.Locked>已锁定</RoslynProbe.Console.Status.Locked>
   <RoslynProbe.Console.Status.Following>跟随</RoslynProbe.Console.Status.Following>
+  <RoslynProbe.Toolbar.Tooltip>切换 RoslynProbe 控制台。\n\n本会话的实时 C# REPL。</RoslynProbe.Toolbar.Tooltip>
 </LanguageData>
