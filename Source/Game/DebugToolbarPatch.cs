@@ -24,26 +24,31 @@ namespace RoslynProbe
         {
             try
             {
-                // Loaded on the game's update thread (this is a GUI callback) and cached in a
-                // boxed holder, because a Texture2D field on this type would trip Verse's
-                // StaticConstructorOnStartupUtility "assets must be loaded in the main thread" warning.
+                // Loaded on the game's update thread (this is a GUI callback). No Texture2D field on
+                // this type on purpose: Verse's StaticConstructorOnStartupUtility audits for assets
+                // loaded off the main thread, and icons are fetched per frame via ContentFinder instead.
                 var row = Traverse.Create(__instance).Field<WidgetRow>("widgetRow").Value;
                 if (row == null) return;
 
                 bool open = ConsoleLayer.IsOpen;
-                if (Icons.On == null) Icons.On = Load("RoslynProbe/Cshape_console_Enabled");
-                if (Icons.Off == null) Icons.Off = Load("RoslynProbe/Cshape_console_Disabled");
-                Texture2D icon = (Texture2D)(open ? Icons.On : Icons.Off);
+                // 不做静态纹理缓存：play data 重载（如切语言）走 LoadedModManager.ClearDestroy() 会销毁
+                // 旧纹理，缓存会持有僵尸引用；ContentFinder.Get 是字典查找，每帧直取开销可忽略。
+                Texture2D icon = Load(open ? "RoslynProbe/Cshape_console_Enabled" : "RoslynProbe/Cshape_console_Disabled");
                 if (icon == null)
                 {
-                    // Loud, once: a silent return here means the toolbar button just never shows up
-                    // and nobody can tell why. Almost always a LoadFolders/Textures path problem.
+                    // 瞬态 vs 配置错误：LanguageDatabase.SelectLanguage → PlayDataLoader.ClearAllPlayData →
+                    // LoadedModManager.ClearDestroy() 再重建，重载窗口期 ContentFinder 必然查不到纹理
+                    // （切语言时曾因此刷过一次本报错）。先静默容忍 IconFailGraceSeconds（本帧不画按钮），
+                    // 持续仍失败才是真正的 Textures/LoadFolders 路径配置错误，才响亮报错一次。
+                    if (iconFailSince < 0f) iconFailSince = Time.realtimeSinceStartup;
+                    if (Time.realtimeSinceStartup - iconFailSince < IconFailGraceSeconds) return;
                     Verse.Log.ErrorOnce(
                         "[Roslyn] 工具栏图标加载失败（" + (open ? "Enabled" : "Disabled") + "）。" +
                         "请确认 Textures\\RoslynProbe\\Cshape_console_*.png 存在，且 LoadFolders.xml 已挂载该目录。",
                         "RoslynProbe.ToolbarIconMissing".GetHashCode());
                     return;
                 }
+                iconFailSince = -1f; // 恢复正常：清掉瞬态计时
 
                 bool clicked = row.ButtonIcon(
                     icon,
@@ -66,15 +71,11 @@ namespace RoslynProbe
             }
         }
 
-        /// <summary>
-        /// Holds the two toolbar icons. Kept behind object refs (not Texture2D fields) so the
-        /// patch type itself carries no asset-typed field and stays clear of the startup audit.
-        /// </summary>
-        private static class Icons
-        {
-            internal static object On;
-            internal static object Off;
-        }
+        /// <summary>图标首次查不到的时刻（-1 = 当前正常）；只用于区分 play data 重载瞬态与真配置错误。</summary>
+        private static float iconFailSince = -1f;
+
+        /// <summary>重载窗口期容忍时长：play data 重载在长事件里跑完，通常远短于此。</summary>
+        private const float IconFailGraceSeconds = 5f;
 
         private static Texture2D Load(string path)
         {
