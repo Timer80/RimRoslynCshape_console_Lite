@@ -398,7 +398,7 @@ namespace RoslynProbe
             // GUI 壳（OnGUI，游戏主线程）或没有 marshal 通道：就地执行。
             if (OnGameThread(ctx) || ctx == null || ctx.Executor == null) return Run(q);
 
-            // stdio / 命名管道：读线程 → 经 Executor 队列 marshal 到游戏更新线程
+            // 命名管道：读线程 → 经 Executor 队列 marshal 到游戏更新线程
             // （ProfilerPrefs.Current 首次访问会 Load()；top 本身依 §4.2 免 marshal，此处统一走 marshal）。
             SlashResult captured = null;
             ReplRequest req = ctx.Executor.Enqueue(

@@ -159,7 +159,7 @@ namespace RoslynProbe.Tests
             string seen = null;
             string raw = "   1 + 1   ";
             string trimmed = raw.Trim();
-            string echoText = "> " + trimmed;                    // PipeConsole.ServeSession / ConsolePipe.OnLine 同款
+            string echoText = "> " + trimmed;                    // PipeConsole.ServeSession 同款
             var a = Handle(trimmed, pending, exec, code => { seen = code; return ReplResult.Success(2); });
             Assert.Equal("> " + "1 + 1", echoText);              // 回显 = trimmed 形式
             Assert.Equal("1 + 1" + Environment.NewLine, seen);   // 判定器收到 trimmed 行,空白被剥除

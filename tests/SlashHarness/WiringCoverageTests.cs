@@ -2,7 +2,7 @@
 //
 // 审查用 6 个变异副本证明接线层「删掉实现 ⇒ 0 条测试变红」。本文件补上承诺 —— 走**真的接线代码**
 // （BootstrapWiring.* / 壳的 internal 派发入口 / SlashJson.TryStrip），使下面四条变异各自**恰好红**：
-//   A) 删 BootstrapWiring.InstallChannelFacts 里的 InstallGui/InstallPipe/InstallStdio ⇒ ChannelFactsWiringCases 红；
+//   A) 删 BootstrapWiring.InstallChannelFacts 里的 InstallGui/InstallPipe ⇒ ChannelFactsWiringCases 红；
 //   B) 删 BootstrapWiring.InstallSlashKernel 里的 SlashCapabilities.Install(caps) ⇒ CapabilityWiringCases 红；
 //   F) 把壳里 ReadIsGameThread() 换成常量 true ⇒ ShellThreadFactCases 红；
 //   E) 把 SlashJson 的分隔空白从 char.IsWhiteSpace 收窄成 ' ' ⇒ JsonTokenWhitespaceCases 红。
@@ -29,7 +29,7 @@ namespace RoslynProbe.Tests
             checks = 0;
             currentCase = "(none)";
 
-            Case("A 通道事实：四类决策 + 三个事实位确实被装（删 InstallX ⇒ 本用例红）", ChannelFactsWiringCases);
+            Case("A 通道事实：管道决策 + 旗标诊断 + 两个事实位确实被装（删 InstallX ⇒ 本用例红）", ChannelFactsWiringCases);
             Case("B 姿势 B 注入：8 个委托全非 null 且身份正确（删 Install ⇒ 本用例红）", CapabilityWiringCases);
             Case("F 读线程事实位：壳把 ReadIsGameThread() 原样送进 ctx（换常量 ⇒ 本用例红）", ShellThreadFactCases);
             Case("E --json 分隔空白：TAB/全角空格/NBSP 都算 token 分隔（收窄成 ' ' ⇒ 本用例红）", JsonTokenWhitespaceCases);
@@ -37,7 +37,6 @@ namespace RoslynProbe.Tests
             // 收尾：还原所有被本类动过的进程级状态（§8.4 幂等）。
             ChannelFacts.ResetForTests();
             SlashCapabilities.ResetForTests();
-            ConsolePipe.ResetIsGameThreadForTests();
             PipeConsole.ResetIsGameThreadForTests();
             SlashRegistry.ResetForTests();
             SlashRegistry.RegisterAll();
@@ -52,24 +51,27 @@ namespace RoslynProbe.Tests
 
         private static void ChannelFactsWiringCases()
         {
-            // 四类情形（Bootstrap 在真机上用的就是这段决策）
-            Check(BootstrapWiring.DecideChannel(true, "sess", true) == BootstrapWiring.ChannelPipe,
-                "带名 ⇒ pipe");
-            Check(BootstrapWiring.DecideChannel(true, "", true) == BootstrapWiring.ChannelStdio,
-                "空名（TryGet 命中但空值）⇒ 回退 stdio");
-            Check(BootstrapWiring.DecideChannel(false, null, true) == BootstrapWiring.ChannelStdio,
-                "裸 -RoslynConsole ⇒ stdio（没有管道）");
-            Check(BootstrapWiring.DecideChannel(false, null, false) == BootstrapWiring.ChannelNone,
-                "两者都没给 ⇒ 零新路径");
+            // 管道决策（Bootstrap 在真机上用的就是这个纯函数）
+            Check(BootstrapWiring.WantsPipe(true, "sess"), "带名 ⇒ 开管道");
+            Check(!BootstrapWiring.WantsPipe(true, ""), "空名 ⇒ 不开管道");
+            Check(!BootstrapWiring.WantsPipe(false, null), "裸旗标 ⇒ 不开管道");
+
+            // 旗标诊断（stdio 通道删除后：裸旗标与空值都必须告警，不静默）
+            Check(BootstrapWiring.BareFlagWarning(true, false), "裸 -RoslynConsole ⇒ 必须告警");
+            Check(!BootstrapWiring.BareFlagWarning(false, true), "带值旗标 ⇒ 不该报「裸旗标」");
+            Check(!BootstrapWiring.BareFlagWarning(false, false), "没传旗标 ⇒ 不告警");
+            Check(BootstrapWiring.EmptyNameWarning(true, ""), "-RoslynConsole= 空名 ⇒ 必须告警");
+            Check(BootstrapWiring.EmptyNameWarning(true, null), "-RoslynConsole= 且值为 null ⇒ 也必须告警");
+            Check(!BootstrapWiring.EmptyNameWarning(true, "sess"), "有名字 ⇒ 不告警");
 
             // 事实位：带名管道 ⇒ 记**可连接全名**（F2），且 GUI 恒装
             ChannelFacts.ResetForTests();
-            BootstrapWiring.InstallChannelFacts(BootstrapWiring.ChannelPipe, "sess");
+            BootstrapWiring.InstallChannelFacts(true, "sess");
             Check(ChannelFacts.Installed, "装事实位后 Installed 应为真");
             ChannelFacts.Snapshot s = ChannelFacts.Current;
             Check(s != null && s.Gui, "GUI 事实必须被装（ConsoleLayer.Wire 在上游完成）");
-            Check(s != null && s.Pipe && !s.Stdio, "带名管道 ⇒ pipe 真、stdio 假（实际 gui/stdio/pipe = "
-                + (s == null ? "<null>" : s.Gui + "/" + s.Stdio + "/" + s.Pipe) + "）");
+            Check(s != null && s.Pipe, "带名管道 ⇒ pipe 真（实际 gui/pipe = "
+                + (s == null ? "<null>" : s.Gui + "/" + s.Pipe) + "）");
             Check(s != null && s.PipeName == PipeConsole.FullPipeName("sess"),
                 "事实位应记 PipeConsole 拼出的全名，实际 " + Show(s == null ? null : s.PipeName));
             Check(s != null && s.PipeName == "roslyn-console-sess",
@@ -80,25 +82,17 @@ namespace RoslynProbe.Tests
             List<Dictionary<string, object>> matrix = StatusCommand.ChannelMatrix(
                 StatusCommand.ChannelFlagsFromFacts(), out agent);
             Check(agent, "pipe 开 ⇒ agentChannelOpen 为真");
-            Check(matrix.Count == 3 && matrix[2]["channel"] != null && (string)matrix[2]["channel"] == "pipe",
-                "矩阵第 3 项应是 pipe（锚点：避免扫错项）");
-            Check(((string)matrix[2]["reason"]).IndexOf("roslyn-console-sess", StringComparison.Ordinal) >= 0,
-                "pipe 的 reason 应给出可连接全名，实际 " + Show((string)matrix[2]["reason"]));
-
-            // stdio 情形（空名/裸旗标都走这条）：无管道名
-            ChannelFacts.ResetForTests();
-            BootstrapWiring.InstallChannelFacts(BootstrapWiring.ChannelStdio, null);
-            s = ChannelFacts.Current;
-            Check(s != null && s.Gui && s.Stdio && !s.Pipe, "stdio 情形 ⇒ gui/stdio 真、pipe 假（实际 "
-                + (s == null ? "<null>" : s.Gui + "/" + s.Stdio + "/" + s.Pipe) + "）");
-            Check(s != null && s.PipeName == "", "stdio 情形不应带管道名，实际 " + Show(s == null ? null : s.PipeName));
+            Check(matrix.Count == 2 && matrix[1]["channel"] != null && (string)matrix[1]["channel"] == "pipe",
+                "矩阵第 2 项应是 pipe（锚点：避免扫错项）");
+            Check(((string)matrix[1]["reason"]).IndexOf("roslyn-console-sess", StringComparison.Ordinal) >= 0,
+                "pipe 的 reason 应给出可连接全名，实际 " + Show((string)matrix[1]["reason"]));
 
             // 零新路径：只有 GUI
             ChannelFacts.ResetForTests();
-            BootstrapWiring.InstallChannelFacts(BootstrapWiring.ChannelNone, null);
+            BootstrapWiring.InstallChannelFacts(false, null);
             s = ChannelFacts.Current;
-            Check(s != null && s.Gui && !s.Stdio && !s.Pipe, "零新路径 ⇒ 只有 GUI（实际 "
-                + (s == null ? "<null>" : s.Gui + "/" + s.Stdio + "/" + s.Pipe) + "）");
+            Check(s != null && s.Gui && !s.Pipe, "零新路径 ⇒ 只有 GUI（实际 "
+                + (s == null ? "<null>" : s.Gui + "/" + s.Pipe) + "）");
             Check(s != null && s.PipeName == "", "零新路径不应带管道名");
 
             ChannelFacts.ResetForTests();
@@ -170,33 +164,19 @@ namespace RoslynProbe.Tests
                 }
             });
 
-            // ① stdio 壳：事实源给 false ⇒ ctx.IsGameThread 必须 false
-            ConsolePipe.ReadIsGameThread = delegate { return false; };
-            SlashResult r = ConsolePipe.StdioSlashDispatch(null, null, "/t-fact");
-            Check(r != null && r.Kind == "t-fact", "stdio 壳应派发到该指令");
-            Check(calls == 1 && !seenThread, "stdio 壳必须把事实源的值(false)送进 ctx.IsGameThread，实际 " + seenThread);
-            Check(seenChannel == SlashCommands.ChannelStdio, "stdio 壳的通道应为 stdio，实际 " + Show(seenChannel));
-
-            // ② 反向对照：源给 true ⇒ ctx 也必须 true（证明「原样透传」，不是写死 false）
-            ConsolePipe.ReadIsGameThread = delegate { return true; };
-            calls = 0; seenThread = false;
-            SlashResult r2 = ConsolePipe.StdioSlashDispatch(null, null, "/t-fact");
-            Check(r2 != null && calls == 1 && seenThread,
-                "事实源给 true 时 ctx.IsGameThread 必须为 true（原样透传）");
-
-            // ③ pipe 壳同样走事实源
+            // ① pipe 壳：事实源给 false ⇒ ctx.IsGameThread 必须 false
             PipeConsole.ReadIsGameThread = delegate { return false; };
             calls = 0; seenThread = true; seenChannel = null;
             SlashResult r3 = PipeConsole.PipeSlashDispatch(null, null, "/t-fact");
             Check(r3 != null && calls == 1 && !seenThread, "pipe 壳必须把事实源的值送进 ctx.IsGameThread");
             Check(seenChannel == SlashCommands.ChannelPipe, "pipe 壳的通道应为 pipe，实际 " + Show(seenChannel));
 
+            // ② 反向对照：源给 true ⇒ ctx 也必须 true（证明「原样透传」，不是写死 false）
             PipeConsole.ReadIsGameThread = delegate { return true; };
             calls = 0; seenThread = false;
             PipeConsole.PipeSlashDispatch(null, null, "/t-fact");
             Check(calls == 1 && seenThread, "pipe 壳的事实位也应原样透传（true 情形）");
 
-            ConsolePipe.ResetIsGameThreadForTests();
             PipeConsole.ResetIsGameThreadForTests();
             SlashRegistry.ResetForTests();
             SlashRegistry.RegisterAll();

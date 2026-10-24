@@ -10,7 +10,7 @@
 //   type   = "Error" / "Warning" / "Message"（Verse.LogMessageType 成员名，逐字取，不改写）。
 //   stack  = LogMessage.StackTrace（原版对无栈条目给 "No stack trace."，本指令同样不改写）。
 // Lines：首行汇总（总条数 / 命中数 / filter），随后逐条 "[E] / [W] / [M] + 正文"；
-//   前缀图例只给 gui / stdio（人看），pipe 通道省掉这一行 token。
+//   前缀图例只给 gui（人看），pipe 通道省掉这一行 token。
 //   栈只进 Data —— 50 条 Error 各带一段栈会把管道输出撑到上千行；原版日志窗口也是"展开才看栈"。
 //
 // ---- 数据源偏离 brief（控制者已签字，非笔误）----
@@ -195,7 +195,7 @@ namespace RoslynProbe
             return "读取日志失败：游戏更新线程未取到快照（handler 未执行或未排空）";
         }
 
-        /// <summary>前缀图例只给 gui / stdio（人看）；pipe 通道省掉这行 token。</summary>
+        /// <summary>前缀图例只给 gui（人看）；pipe 通道省掉这行 token。</summary>
         public static bool LegendFor(string channel)
         {
             return !string.Equals(channel, "pipe", StringComparison.OrdinalIgnoreCase);
@@ -340,7 +340,7 @@ namespace RoslynProbe
             return list;
         }
 
-        /// <summary>BuildResult 的默认口径：带前缀图例（gui / stdio 的人读形态）。</summary>
+        /// <summary>BuildResult 的默认口径：带前缀图例（gui 的人读形态）。</summary>
         public static SlashResult BuildResult(List<Record> all, Query q)
         {
             return BuildResult(all, q, true);

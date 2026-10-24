@@ -1,6 +1,6 @@
 // RoslynProbe —— 壳层 `--json` 尾旗标(S11-4):`SlashResult.Data` 的机器可读出口。
 //
-// 背景:删掉 HTTP 后 Data 一度没有消费者(三个壳只渲染 Lines),而 /debug-action list 这类指令的
+// 背景:删掉 HTTP 后 Data 一度没有消费者(两个壳只渲染 Lines),而 /debug-action list 这类指令的
 // 完整清单只在 Data 里(Lines 有 200 行上限)。裁定:壳层支持输入行里的**独立 token** `--json` ——
 // 该条指令渲染 Data 的 JSON 而不是 Lines。内核零改动:本文件只包一层,SlashRegistry 与 Cmds/* 不动。
 //
@@ -15,7 +15,7 @@
 //     Data 为 null ⇒ 字面 `null`(该指令没有机器可读数据);序列化器抛(Data 里有不可序列化的值)
 //     ⇒ 单行 `{"ok":false,"error":"…"}` —— 壳层绝不因 --json 而崩。Kind / Data 本身不动。
 //
-// 适用通道:GUI(行仍带既有的 "! " 前缀)、stdio v1(终端与管道)、命名管道 v2。
+// 适用通道:GUI(行仍带既有的 "! " 前缀)、命名管道 v2。
 // HTTP(Commands.cs)的 slash 响应体本就已把 Data 的键平铺进 JSON,故它不走本文件(该文件随 T5 删除)。
 // 用法与 Data 作者纪律见 docs/slash-command-authoring.md §3.6。
 
@@ -28,7 +28,7 @@ namespace RoslynProbe
 {
     /// <summary>
     /// `--json` 尾旗标的唯一实现(壳层):识别/剥离 + 把 <see cref="SlashResult.Data"/> 渲染成单行 JSON。
-    /// 三个壳(GUI / stdio v1 / 命名管道 v2)都经 <see cref="TryDispatch"/> 派发,故旗标行为三通道同源。
+    /// 两个壳(GUI / 命名管道 v2)都经 <see cref="TryDispatch"/> 派发,故旗标行为两通道同源。
     /// </summary>
     public static class SlashJson
     {

@@ -3,7 +3,7 @@
 // 数据源全是只读 BCL 标量:GC.GetGCMemoryInfo()(堆占用 / 总量上限 / 已提交 / 碎片 /
 // 内存负载 / 暂停时间占比)、GC.GetTotalMemory(false)、GC.CollectionCount(0/1/2)、
 // GC.GetTotalAllocatedBytes(false)、GCSettings、Process.WorkingSet64。
-// 只读 ⇒ GUI(游戏线程)/ stdio / 命名管道(读线程)三个壳都能直接跑,不需要 Executor marshal;
+// 只读 ⇒ GUI(游戏线程)/ 命名管道(读线程)两个壳都能直接跑,不需要 Executor marshal;
 // 本文件绝不碰 ConsoleLog / Unity / Verse(线程契约见 docs/slash-command-authoring.md §3.4.1)。
 //
 // Data 键(小驼峰、稳定,工具消费方依赖):heapBytes,totalMemoryBytes,gen0,gen1,gen2,

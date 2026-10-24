@@ -222,7 +222,7 @@ namespace RoslynProbe.Tests
             // DefaultUsings 拒删并点名（逐字与旧实现一致）。
             SlashResult r;
             Check(SlashCommands.TryDispatch("/usings remove System", host, null, out r,
-                SlashCommands.ChannelStdio, false), "/usings remove 应被吞下");
+                SlashCommands.ChannelPipe, false), "/usings remove 应被吞下");
             Check(r != null && r.Kind == "usings-remove", "Kind 应为 usings-remove");
             Check(r != null && r.Lines.Count == 1 && r.Lines[0] == "拒绝删除（DefaultUsings 不可删）: System",
                 "DefaultUsings 拒删行应逐字，实际 " + Show(r == null || r.Lines.Count == 0 ? null : r.Lines[0]));
@@ -236,14 +236,14 @@ namespace RoslynProbe.Tests
             // /usings-remove 表项同一条内核（表项自己剥可选的 "remove" 前缀）。
             SlashResult r2;
             Check(SlashCommands.TryDispatch("/usings-remove System", host, null, out r2,
-                SlashCommands.ChannelStdio, false), "/usings-remove 表项应被吞下");
+                SlashCommands.ChannelPipe, false), "/usings-remove 表项应被吞下");
             Check(r2 != null && r2.Kind == "usings-remove" && r2.Lines.Count == 1
                 && r2.Lines[0] == "拒绝删除（DefaultUsings 不可删）: System",
                 "usings-remove 表项应与 /usings remove 同路产出同一行");
 
             // 空参数：Lines 旧用法行逐字；Data 必须有机器可读的原因（S11-4 复审边角 1）。
             SlashResult r3;
-            SlashCommands.TryDispatch("/usings remove", host, null, out r3, SlashCommands.ChannelStdio, false);
+            SlashCommands.TryDispatch("/usings remove", host, null, out r3, SlashCommands.ChannelPipe, false);
             Check(r3 != null && r3.Kind == "usings-remove" && r3.Lines.Count == 1
                 && r3.Lines[0] == "用法: /usings remove <条目> [...]（例: /usings remove System.IO）",
                 "空 remove 的用法行应逐字，实际 " + Show(r3 == null || r3.Lines.Count == 0 ? null : r3.Lines[0]));
@@ -258,14 +258,14 @@ namespace RoslynProbe.Tests
             // 未找到行逐字。
             SlashResult r4;
             SlashCommands.TryDispatch("/usings remove NoSuch.NamespaceZzz", host, null, out r4,
-                SlashCommands.ChannelStdio, false);
+                SlashCommands.ChannelPipe, false);
             Check(r4 != null && r4.Lines.Count == 1 && r4.Lines[0] == "未找到: NoSuch.NamespaceZzz",
                 "未找到行应逐字，实际 " + Show(r4 == null || r4.Lines.Count == 0 ? null : r4.Lines[0]));
 
             // skipFirstWord 的修复（复审裁定 2）：remove 没有动词可跳，"add" 是普通条目 ⇒
             // 必须报「未找到: add」，绝不能被解析器静默吃掉一个 token。
             SlashResult r5;
-            SlashCommands.TryDispatch("/usings remove add", host, null, out r5, SlashCommands.ChannelStdio, false);
+            SlashCommands.TryDispatch("/usings remove add", host, null, out r5, SlashCommands.ChannelPipe, false);
             Check(r5 != null && r5.Lines.Count == 1 && r5.Lines[0] == "未找到: add",
                 "remove 不得静默跳掉首词 add（应为 未找到: add），实际 "
                 + Show(r5 == null || r5.Lines.Count == 0 ? null : r5.Lines[0]));
@@ -276,7 +276,7 @@ namespace RoslynProbe.Tests
             // /usings remove add System.IO：两个条目都应参与（add 不再被当动词）。
             SlashResult r6;
             SlashCommands.TryDispatch("/usings remove add System.IO", host, null, out r6,
-                SlashCommands.ChannelStdio, false);
+                SlashCommands.ChannelPipe, false);
             Check(r6 != null && r6.Data != null
                 && ((List<string>)r6.Data["notFound"]).Count == 2
                 && ((List<string>)r6.Data["notFound"])[0] == "add"
@@ -455,7 +455,7 @@ namespace RoslynProbe.Tests
             // ---- ① 空参 remove + --json ----
             SlashResult rj;
             Check(SlashJson.TryDispatch("/usings remove --json", host, null,
-                SlashCommands.ChannelStdio, false, out rj), "--json 空参 remove 应被吞下");
+                SlashCommands.ChannelPipe, false, out rj), "--json 空参 remove 应被吞下");
             Check(rj != null && rj.Kind == "usings-remove", "Kind 应为 usings-remove");
             Check(rj != null && rj.Data != null, "--json 空参 remove 的 Data 不得为 null（消费者只看 Data）");
             Check(rj != null && rj.Data != null && (bool)rj.Data["ok"] == false && (bool)rj.Data["usage"] == true,
@@ -538,7 +538,7 @@ namespace RoslynProbe.Tests
                 // ② /usings remove<空白>System ⇒ 必须走 remove 路径（DefaultUsings 拒删并点名）
                 SlashResult r2;
                 SlashCommands.TryDispatch("/usings remove" + b + "System", host, null, out r2,
-                    SlashCommands.ChannelStdio, false);
+                    SlashCommands.ChannelPipe, false);
                 Check(r2 != null && r2.Kind == "usings-remove" && r2.Lines.Count == 1
                     && r2.Lines[0] == "拒绝删除（DefaultUsings 不可删）: System",
                     n + "：/usings remove 必须走 remove 路径，实际 "
@@ -629,7 +629,7 @@ namespace RoslynProbe.Tests
 
             SlashResult r;
             Check(SlashCommands.TryDispatch("/dev list", new ReplHost(), null, out r,
-                SlashCommands.ChannelStdio, false), "姿势 B 指令仍应被吞下");
+                SlashCommands.ChannelPipe, false), "姿势 B 指令仍应被吞下");
             Check(r != null && r.Kind == "missing-capability",
                 "未注入能力时应回 missing-capability，实际 " + (r == null ? "<null>" : r.Kind));
             Check(r != null && r.Data != null && (string)r.Data["capability"] == "dev", "应点名 dev");

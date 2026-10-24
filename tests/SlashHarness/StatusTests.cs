@@ -182,42 +182,33 @@ namespace RoslynProbe.Tests
         {
             bool agent;
 
-            // (1) 事实位**未安装** ⇒ 三通道一律 unknown（null），**不是** false —— 未知是一等公民。
+            // (1) 事实位**未安装** ⇒ 两通道一律 unknown（null），**不是** false —— 未知是一等公民。
             List<Dictionary<string, object>> unknown = StatusCommand.ChannelMatrix(
                 new StatusCommand.ChannelFlags { Note = "事实位未安装" }, out agent);
-            Check(unknown.Count == 3, "通道矩阵应三条（gui/stdio/pipe），实际 " + unknown.Count);
-            Check((bool?)unknown[0]["available"] == null && (bool?)unknown[1]["available"] == null
-                && (bool?)unknown[2]["available"] == null,
-                "事实位未安装时三通道 available 都应为 null（未知），不能报成未开");
+            Check(unknown.Count == 2, "通道矩阵应两条（gui/pipe），实际 " + unknown.Count);
+            Check((bool?)unknown[0]["available"] == null && (bool?)unknown[1]["available"] == null,
+                "事实位未安装时两通道 available 都应为 null（未知），不能报成未开");
             Check(((string)unknown[0]["reason"]).IndexOf("事实位未安装", StringComparison.Ordinal) >= 0,
                 "未安装应写进 reason，实际 " + Show(unknown[0]["reason"]));
             Check(!agent, "未知不得当作开（agentChannelOpen=false）");
 
-            // (2) 装了事实位、只开 gui ⇒ gui 真、stdio/pipe 假、agentChannelOpen=false
+            // (2) 装了事实位、只开 gui ⇒ gui 真、pipe 假、agentChannelOpen=false
             List<Dictionary<string, object>> guiOnly = StatusCommand.ChannelMatrix(
                 new StatusCommand.ChannelFlags { Installed = true, GuiOpen = true }, out agent);
             Check((bool?)guiOnly[0]["available"] == true, "gui 应报真");
-            Check((bool?)guiOnly[1]["available"] == false && (bool?)guiOnly[2]["available"] == false,
-                "未启动的 stdio/pipe 应报假（这次是真的「未开」，不是未知）");
+            Check((bool?)guiOnly[1]["available"] == false,
+                "未启动的 pipe 应报假（这次是真的「未开」，不是未知）");
             Check(!agent, "只有 gui 时 agentChannelOpen=false");
 
-            // (3) 装了事实位、gui+stdio ⇒ gui 真、stdio 真、pipe 假
-            List<Dictionary<string, object>> guiStdio = StatusCommand.ChannelMatrix(
-                new StatusCommand.ChannelFlags { Installed = true, GuiOpen = true, StdioOpen = true }, out agent);
-            Check((bool?)guiStdio[0]["available"] == true && (bool?)guiStdio[1]["available"] == true
-                && (bool?)guiStdio[2]["available"] == false,
-                "gui+stdio 装的实例应为 真/真/假");
-            Check(agent, "gui+stdio 时 agentChannelOpen=true");
-
-            // (4) 装了事实位、带名管道 ⇒ pipe 真且 reason 点名管道名
+            // (3) 装了事实位、带名管道 ⇒ pipe 真且 reason 点名管道名
             List<Dictionary<string, object>> pipe = StatusCommand.ChannelMatrix(
                 new StatusCommand.ChannelFlags { Installed = true, GuiOpen = true, PipeOpen = true, PipeName = "sess" }, out agent);
-            Check((bool?)pipe[2]["available"] == true && agent, "带名管道 → pipe 真且 agentChannelOpen");
-            Check(((string)pipe[2]["reason"]).IndexOf("sess", StringComparison.Ordinal) >= 0, "pipe 说明应点名管道名");
+            Check((bool?)pipe[1]["available"] == true && agent, "带名管道 → pipe 真且 agentChannelOpen");
+            Check(((string)pipe[1]["reason"]).IndexOf("sess", StringComparison.Ordinal) >= 0, "pipe 说明应点名管道名");
 
-            Check(StatusCommand.ChannelOpenText(unknown, "stdio") == "未知", "未安装 → ChannelOpenText 未知");
-            Check(StatusCommand.ChannelOpenText(guiStdio, "stdio") == "开", "ChannelOpenText 开");
-            Check(StatusCommand.ChannelOpenText(guiOnly, "stdio") == "未开", "装了事实位且真没开 → 未开");
+            Check(StatusCommand.ChannelOpenText(unknown, "pipe") == "未知", "未安装 → ChannelOpenText 未知");
+            Check(StatusCommand.ChannelOpenText(pipe, "pipe") == "开", "ChannelOpenText 开");
+            Check(StatusCommand.ChannelOpenText(guiOnly, "pipe") == "未开", "装了事实位且真没开 → 未开");
             Check(StatusCommand.ChannelOpenText(null, "gui") == "未知", "空矩阵应为未知");
         }
 
@@ -233,12 +224,7 @@ namespace RoslynProbe.Tests
 
             ChannelFacts.InstallGui();
             StatusCommand.ChannelFlags f1 = StatusCommand.ChannelFlagsFromFacts();
-            Check(f1.Installed && f1.GuiOpen && !f1.StdioOpen && !f1.PipeOpen,
-                "只装 gui 时事实应为 gui 真、其余假");
-
-            ChannelFacts.InstallStdio();
-            StatusCommand.ChannelFlags f2 = StatusCommand.ChannelFlagsFromFacts();
-            Check(f2.GuiOpen && f2.StdioOpen && !f2.PipeOpen, "gui+stdio 装的实例应为 gui/stdio 真、pipe 假");
+            Check(f1.Installed && f1.GuiOpen && !f1.PipeOpen, "只装 gui 时事实应为 gui 真、pipe 假");
 
             // F2：事实位记的是**可连接全名**（roslyn-console-<短名>），不是命令行短名 ——
             // 消费方按 /status 拿到的名字必须能直接连上。
@@ -364,7 +350,7 @@ namespace RoslynProbe.Tests
             Check((bool)CapabilityIn(caps, "channels")["ready"], "有非 GUI 通道时 channels.ready 应为 true");
 
             List<Dictionary<string, object>> channels = (List<Dictionary<string, object>>)r.Data["channels"];
-            Check(channels.Count == 3, "通道矩阵应三条，实际 " + channels.Count);
+            Check(channels.Count == 2, "通道矩阵应两条，实际 " + channels.Count);
             foreach (Dictionary<string, object> ch in channels)
                 Check(ch.ContainsKey("channel") && ch.ContainsKey("available") && ch.ContainsKey("reason"),
                     "通道项应含 {channel,available,reason}");

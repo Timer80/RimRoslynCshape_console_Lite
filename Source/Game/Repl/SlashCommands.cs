@@ -2,7 +2,7 @@
 //
 // 历史：本文件曾是唯一内核（switch 分派）。S11-2 把 /help /usings /usings remove /reset /quit
 // 迁到表驱动内核（SlashRegistry），本文件降级为**兼容壳**：
-//   * IsCommand / TryDispatch 保留为内核兼容入口（内部转发到 SlashRegistry）。三个壳（GUI / stdio v1 /
+//   * IsCommand / TryDispatch 保留为内核兼容入口（内部转发到 SlashRegistry）。两个壳（GUI /
 //     命名管道 v2）**经 SlashJson.TryDispatch 进这里**（壳层的 --json 剥离/渲染在那里，见 SlashJson.cs）；
 //   * legacy 5 条的注册与 handler 仍住在本文件（RegisterAll 反射调用这里的 public static Register()）。
 //   * 还登记**两段式别名**（/usings add|remove、/ui open）：薄 handler 只做「子动词分流 + 反查表项 +
@@ -28,8 +28,6 @@ namespace RoslynProbe
 
         /// <summary>游戏内 GUI 控制台（ConsoleWindow.Submit，OnGUI ⇒ 游戏线程）。</summary>
         public const string ChannelGui = "gui";
-        /// <summary>stdio v1 终端/管道（ConsolePipe，读线程）。</summary>
-        public const string ChannelStdio = "stdio";
         /// <summary>命名管道 v2（PipeConsole，会话读线程）。</summary>
         public const string ChannelPipe = "pipe";
 
@@ -44,8 +42,8 @@ namespace RoslynProbe
 
         /// <summary>
         /// 内核兼容入口：内部转发到表驱动内核（SlashRegistry.TryDispatch）。本方法**不认 --json**
-        /// （旗标是壳层语义：三个壳经 SlashJson.TryDispatch 调这里，剥离/渲染都发生在那一层）。
-        /// <paramref name="channel"/> 进 ctx.Channel（gui/stdio/pipe）；
+        /// （旗标是壳层语义：两个壳经 SlashJson.TryDispatch 调这里，剥离/渲染都发生在那一层）。
+        /// <paramref name="channel"/> 进 ctx.Channel（gui/pipe）；
         /// <paramref name="isGameThread"/> 是壳层填的线程事实位（契约 v1.1 §3.4.1，拿不准填 false）。
         /// 姿势 B 的 8 个能力委托由 SlashCapabilities 从 Bootstrap 注入的模板逐字复制。
         /// </summary>

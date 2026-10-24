@@ -285,7 +285,7 @@ namespace RoslynProbe
         /// 系统提示行的**规范文本**（GUI 产生点的唯一出口）：统一加一次 <c>"! "</c> 前缀；已带则不重复加。
         /// 与之配对的是 <see cref="SystemRowText"/>（渲染层，只显示、不再补前缀）—— 两侧各加一次曾让窗口
         /// 显示成 <c>!! {...}</c>，而缓冲里只有一个（S11-8-1 真机边角 B1）。
-        /// 同一约定也适用于 stdio/pipe 壳（它们落账时传 <c>"! " + 行</c>）。
+        /// 同一约定也适用于 pipe 壳（落账时传 <c>"! " + 行</c>）。
         /// </summary>
         public static string SystemNoteText(string body)
         {
@@ -389,7 +389,7 @@ namespace RoslynProbe
 
         /// <summary>
         /// quit 时该落账的 SystemNote 序列（纯逻辑，可单测）：先该指令自己的行（带 --json 时就是
-        /// Data 的单行 JSON），最后才是 <c>bye</c>。与 stdio/pipe 同口径（那两条先逐行输出 Lines，
+        /// Data 的单行 JSON），最后才是 <c>bye</c>。与 pipe 同口径（它先逐行输出 Lines，
         /// 再由 SessionLine 追加 "&gt; bye"）。调用方给每行加 "! " 前缀后落 ConsoleLog。
         /// </summary>
         public static List<string> QuitNoteLines(SlashResult slash)
@@ -429,7 +429,7 @@ namespace RoslynProbe
                 {
                     // 边角 2（S11-4 复审）：quit 在 GUI 也必须先把该指令自己的行落账 —— 带 --json 时
                     // 那就是 Data 的单行 JSON（旧实现直接丢掉 slash.Lines，GUI 下这行会消失，而
-                    // stdio/pipe 会先逐行输出 Lines 再由 SessionLine 追加 "> bye"，三通道口径不一致）。
+                    // pipe 会先逐行输出 Lines 再由 SessionLine 追加 "> bye"，两通道口径不一致）。
                     // 这里直调 SystemNote 而非入队：进程即将 Root.Shutdown，队列可能不再被 Tick。
                     foreach (string note in QuitNoteLines(slash))
                         ConsoleLog.SystemNote(SystemNoteText(note));

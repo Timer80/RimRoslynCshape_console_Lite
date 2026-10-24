@@ -1,7 +1,7 @@
-// RoslynProbe —— 会话行分派内核(协议 v2,T2.5b 抽取自 ConsolePipe.OnLine)。
+// RoslynProbe —— 会话行分派内核(协议 v2)。
 //
-// 把"一行如何分派"提为纯函数 + 可注入求值器,ConsolePipe(stdio v1)与
-// PipeConsole(命名管道 v2)共用同一份协议文本与判定顺序:
+// 把"一行如何分派"提为纯函数 + 可注入求值器;命名管道 v2(PipeConsole)与
+// 壳层共用同一份协议文本与判定顺序:
 //   空行 → 忽略 | Slash → 派发(共享内核) | 方案 D 累积判定 → "..." |
 //   完整提交 → Enqueue 求值(TCS 等待/超时/MarkTimedOut) → 裸结果行 → ">"。
 //
@@ -47,7 +47,7 @@ namespace RoslynProbe
         public const int DefaultTimeoutMs = 15000;
         public const int MaxQueue = 32;
 
-        /// <summary>一次完整求值:与原 ConsolePipe 闭包同款语义(Begin 落账 + host.Eval)。</summary>
+        /// <summary>一次完整求值:壳层闭包语义(Begin 落账 + host.Eval)。</summary>
         public delegate ReplResult Evaluator(string code);
 
         /// <summary>Slash 派发钩子:实现里做 ConsoleLog SystemNote 落账,返回派发结果;

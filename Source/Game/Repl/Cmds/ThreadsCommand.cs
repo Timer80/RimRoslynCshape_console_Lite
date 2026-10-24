@@ -5,13 +5,12 @@
 // 注册线程),其余写 null —— 这是 Data 里允许为 null 的两处语义之一。
 //
 // 线程名:Windows 的 GetThreadDescription(线程描述)。.NET 在设置 Thread.Name 时会写线程描述,
-// 所以 "RoslynProbe.ConsolePipe" / "RoslynProbe.PipeConsole" / "RoslynProbe.HTTP" /
-// ".NET Finalizer" 这类名字能看到(.NET 10 + Windows 11 实测可行)。
+// 所以 "RoslynProbe.PipeConsole" / ".NET Finalizer" 这类名字能看到(.NET 10 + Windows 11 实测可行)。
 //   实测注意:某些 Windows 构建 / kernel32 hook 下 GetThreadDescription 返回非 0 的 HRESULT
 //   (实测 0x10000000)但缓冲区照样有效 —— 因此这里**不判 HRESULT**,只认"指针非空且字符串非空";
 //   非 Windows / OpenThread 失败 / API 缺失一律降级为 null,绝不抛、绝不崩。
 //
-// 会话线程与主线程:handler 所在的线程就是"当前会话线程"(stdio / 管道 = 读线程,GUI = 游戏线程);
+// 会话线程与主线程:handler 所在的线程就是"当前会话线程"(管道 = 读线程,GUI = 游戏线程);
 //   "游戏主线程" = 注册(RegisterAll,StaticConstructorOnStartup 主线程)时所在线程;
 //   若本次调用的**线程事实位** ctx.IsGameThread 为 true(契约 v1.1 §3.4.1:壳层填,拿不准填 false),
 //   则改取当前线程(权威:本次就在游戏线程)。**不用 Channel 猜线程** —— Channel 只用于展示。

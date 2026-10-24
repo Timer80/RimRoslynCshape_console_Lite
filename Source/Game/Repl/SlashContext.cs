@@ -13,7 +13,7 @@
 //     return ctx.CallDev(rest);
 // 于是"忘了注册"在三个通道都表现为一行响亮的自解释错误，而不是 NullReferenceException。
 //
-// 线程契约：本包自身无状态、无锁。GUI 壳在游戏线程调用；stdio/管道壳在读线程调用 ——
+// 线程契约：本包自身无状态、无锁。GUI 壳在游戏线程调用；管道壳在读线程调用 ——
 // provider 里任何碰 ConsoleLog / Unity / Verse 的动作必须自己 executor.Enqueue marshal
 // （坑见 docs/slash-command-authoring.md §6）。
 
@@ -29,7 +29,7 @@ namespace RoslynProbe
     /// </summary>
     public sealed class SlashContext
     {
-        /// <summary>调用壳的通道名："gui" / "stdio" / "pipe"；未接线为 null。可选（/status 自报通道用）。</summary>
+        /// <summary>调用壳的通道名："gui" / "pipe"；未接线为 null。可选（/status 自报通道用）。</summary>
         public string Channel;
 
         /// <summary>REPL 门面（/usings、/status 直接读它；可为 null）。</summary>
@@ -41,7 +41,7 @@ namespace RoslynProbe
         /// <summary>
         /// **调用本次 Slash 的线程是否游戏线程**；壳层必须填。拿不准就填 <c>false</c>
         /// —— 宁可多一次 marshal，也不要裸读 Unity/Verse 对象。
-        /// <para>壳层填法：<c>gui</c> 壳 → ctx.IsGameThread = true；<c>stdio</c> / 命名管道壳 →
+        /// <para>壳层填法：<c>gui</c> 壳 → ctx.IsGameThread = true；命名管道壳 →
         /// 由壳在游戏线程内判定（壳层本就引用 Assembly-CSharp，可调 <c>UnityData.IsInMainThread</c>；<c>UnityData</c> 来自 Assembly-CSharp、不是编译期桩层 UnityStubs）
         /// 或直接 false（会话线程）。</para>
         /// <para>provider 据此决定内联还是 marshal：

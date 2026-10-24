@@ -147,7 +147,7 @@ namespace RoslynProbe
             public string Channel = "";
             /// <summary>逐通道可用性： [{channel,available,reason}]；available 为 null = 未知（事实位未安装）。</summary>
             public List<Dictionary<string, object>> Channels = new List<Dictionary<string, object>>();
-            /// <summary>非 GUI 通道是否开（stdio v1 或 pipe v2）—— capabilities.channels.ready 用它；未知时 false 且 reason 说明。</summary>
+            /// <summary>非 GUI 通道是否开（pipe v2）—— capabilities.channels.ready 用它；未知时 false 且 reason 说明。</summary>
             public bool AgentChannelOpen;
             /// <summary>事实位未安装时的说明（非空 = 未知，不报成「未开」）。</summary>
             public string ChannelsNote = "";
@@ -162,12 +162,10 @@ namespace RoslynProbe
         /// <summary>通道开关（来自 ChannelFacts 事实位；纯数据）。</summary>
         public sealed class ChannelFlags
         {
-            /// <summary>**事实位是否已安装**：false ⇒ 三通道在矩阵里一律 unknown（不是 false）。</summary>
+            /// <summary>**事实位是否已安装**：false ⇒ 两通道在矩阵里一律 unknown（不是 false）。</summary>
             public bool Installed;
             /// <summary>GUI 控制台装配（Bootstrap: ConsoleLayer.Wire）。</summary>
             public bool GuiOpen;
-            /// <summary>stdio v1 已启动（Bootstrap: ConsolePipe.Start）。</summary>
-            public bool StdioOpen;
             /// <summary>命名管道 v2 已启动（Bootstrap: PipeConsole.Start）。</summary>
             public bool PipeOpen;
             public string PipeName = "";
@@ -251,7 +249,7 @@ namespace RoslynProbe
             env.HarmonyDetail = harmonyDetail;
 
             // ---- 非标量游戏状态：只在游戏线程采样（就地或 marshal）----
-            // 判据只认 ctx.IsGameThread（契约 v1.1）；壳层在 stdio/管道下必须自己填，拿不准就 false。
+            // 判据只认 ctx.IsGameThread（契约 v1.1）；壳层在管道下必须自己填，拿不准就 false。
             int route = RouteFor(ctx.IsGameThread, ctx.Executor != null);
             if (route == RouteInline)
             {
@@ -427,12 +425,11 @@ namespace RoslynProbe
             if (s == null)
             {
                 f.Installed = false;
-                f.Note = "通道事实位未安装（ChannelFacts 未被 Bootstrap 写入：离线单测，或 Bootstrap 尚未跑到那段）—— 三通道一律未知";
+                f.Note = "通道事实位未安装（ChannelFacts 未被 Bootstrap 写入：离线单测，或 Bootstrap 尚未跑到那段）—— 两通道一律未知";
                 return f;
             }
             f.Installed = true;
             f.GuiOpen = s.Gui;
-            f.StdioOpen = s.Stdio;
             f.PipeOpen = s.Pipe;
             f.PipeName = s.PipeName ?? "";
             f.Note = "事实位：Bootstrap 启动每条通道时写入";
@@ -453,7 +450,6 @@ namespace RoslynProbe
             {
                 string why = NonEmpty(f.Note) ? f.Note : "通道事实位未安装 —— 未知";
                 list.Add(Channel("gui", null, why));
-                list.Add(Channel("stdio", null, why));
                 list.Add(Channel("pipe", null, why));
                 agentChannelOpen = false;
                 return list;
@@ -462,13 +458,10 @@ namespace RoslynProbe
             list.Add(Channel("gui", f.GuiOpen,
                 f.GuiOpen ? "Bootstrap 装配了 GUI 控制台（ConsoleLayer.Wire）"
                           : "本实例未装配 GUI 控制台"));
-            list.Add(Channel("stdio", f.StdioOpen,
-                f.StdioOpen ? "Bootstrap 启动了 stdio v1（ConsolePipe.Start，终端形态）"
-                            : "本实例未启动 stdio v1"));
             list.Add(Channel("pipe", f.PipeOpen,
                 f.PipeOpen ? "Bootstrap 启动了命名管道 v2（PipeConsole.Start: " + OneLine(f.PipeName, 40) + "）"
                            : "本实例未启动命名管道 v2"));
-            agentChannelOpen = f.StdioOpen || f.PipeOpen;
+            agentChannelOpen = f.PipeOpen;
             return list;
         }
 
@@ -536,7 +529,6 @@ namespace RoslynProbe
                     + "）—— 判不出来就不下结论（ready=false 表示「不可断言」，不表示「没装」）";
 
             string channelsReason = "本实例对外通道: gui=" + ChannelOpenText(env.Channels, "gui")
-                + "; stdio=" + ChannelOpenText(env.Channels, "stdio")
                 + "; pipe=" + ChannelOpenText(env.Channels, "pipe")
                 + "；来源=ChannelFacts 事实位（Bootstrap 启动每条通道时写入）"
                 + (NonEmpty(env.ChannelsNote) ? "；" + OneLine(env.ChannelsNote, 160) : "");

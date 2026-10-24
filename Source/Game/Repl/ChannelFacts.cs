@@ -27,8 +27,6 @@ namespace RoslynProbe
         {
             /// <summary>GUI 控制台（ConsoleLayer.Wire 装配）。</summary>
             public readonly bool Gui;
-            /// <summary>stdio v1 终端形态（ConsolePipe.Start）。</summary>
-            public readonly bool Stdio;
             /// <summary>命名管道 v2（PipeConsole.Start 已被调用）。</summary>
             public readonly bool Pipe;
             /// <summary>
@@ -37,10 +35,9 @@ namespace RoslynProbe
             /// </summary>
             public readonly string PipeName;
 
-            public Snapshot(bool gui, bool stdio, bool pipe, string pipeName)
+            public Snapshot(bool gui, bool pipe, string pipeName)
             {
                 Gui = gui;
-                Stdio = stdio;
                 Pipe = pipe;
                 PipeName = pipeName ?? "";
             }
@@ -61,16 +58,7 @@ namespace RoslynProbe
         /// </summary>
         public static void InstallGui()
         {
-            Update(delegate(Snapshot s) { return new Snapshot(true, s.Stdio, s.Pipe, s.PipeName); });
-        }
-
-        /// <summary>
-        /// stdio v1 的 <c>ConsolePipe.Start</c> **已被调用**（Bootstrap 在它返回后调用本方法）。
-        /// 口径（F3）：Start 只起读线程就返回 —— 事实位记的是「线程已起」，不是「stdin 可用已确认」。
-        /// </summary>
-        public static void InstallStdio()
-        {
-            Update(delegate(Snapshot s) { return new Snapshot(s.Gui, true, s.Pipe, s.PipeName); });
+            Update(delegate(Snapshot s) { return new Snapshot(true, s.Pipe, s.PipeName); });
         }
 
         /// <summary>
@@ -82,7 +70,7 @@ namespace RoslynProbe
         /// <param name="pipeName">**可连接全名**（用 <c>PipeConsole.FullPipeName(短名)</c> 拼），不是命令行短名。</param>
         public static void InstallPipe(string pipeName)
         {
-            Update(delegate(Snapshot s) { return new Snapshot(s.Gui, s.Stdio, true, pipeName ?? ""); });
+            Update(delegate(Snapshot s) { return new Snapshot(s.Gui, true, pipeName ?? ""); });
         }
 
         /// <summary>测试隔离专用：清掉事实位（回到「未安装 = 未知」）。运行时不需要。</summary>
@@ -95,7 +83,7 @@ namespace RoslynProbe
         {
             lock (Gate)
             {
-                Snapshot s = current ?? new Snapshot(false, false, false, "");
+                Snapshot s = current ?? new Snapshot(false, false, "");
                 current = change(s);
             }
         }

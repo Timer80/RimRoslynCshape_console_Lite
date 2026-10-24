@@ -4,8 +4,8 @@
 // 断开=会话结束,重连=新会话;求值状态(usings/directives/变量)在
 // ReplHost/RoslynEngine 对象里,与连接无关,天然跨连接延续。单客户端同一
 // 时间:第二连接在内核等待队列挂起,首连接断开后被本 accept 接入。
-// 协议行与 stdio v1 一字不改:">" / "> 行" / "..." / 裸结果 / "> bye"。
-// 回显:读到非空行先打 "> " + 行(与 v1 trimmed 口径一致,规格 §7.5:管道对端是
+// 协议行:">" / "> 行" / "..." / 裸结果 / "> bye"。
+// 回显:读到非空行先打 "> " + 行(trimmed 口径,规格 §7.5:管道对端是
 // agent,mod 回显保证转录完整)。
 // Slash 分支与完整提交的判定顺序全部复用 SessionLine/SessionEval,
 // 本文件只做 IO 层(StreamReader/StreamWriter over NamedPipeServerStream)。

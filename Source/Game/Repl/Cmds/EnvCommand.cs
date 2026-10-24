@@ -1335,7 +1335,7 @@ namespace RoslynProbe
             t["disable-compute-shaders"] = new ArgSpec("game", "关 compute shader(Verse UnityData)", null);
 
             // ---- mod 开关 ----
-            t["roslynconsole"] = new ArgSpec("mod", "RoslynProbe 的通道开关:裸旗标 = v1 stdio 终端;=名 = v2 命名管道名(空值告警并回退 v1)", "[=管道名]");
+            t["roslynconsole"] = new ArgSpec("mod", "RoslynProbe 的通道开关:=名 = v2 命名管道名;裸旗标与空值都已废弃(只告警)", "[=管道名]");
 
             return t;
         }

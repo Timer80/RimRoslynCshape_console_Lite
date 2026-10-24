@@ -5,10 +5,6 @@
 //     现在的不变式是「窗口 == 缓冲,单前缀」:
 //       产生点唯一出口 SystemNoteText 保证缓冲文本恰好一个 "! "(且幂等);
 //       渲染层唯一出口 SystemRowText 原样显示,不再补前缀。
-// B2:stdio v1 的中文乱码(T3 遗留,docs/boundary-suite/NOTE-stdio-noise.md 第 3 节)根因是游戏进程没设
-//     Console.OutputEncoding;现在 ConsolePipe.Start() 设为 UTF-8 **无 BOM**,失败(赋值抛/被宿主忽略)
-//     一律收敛成可读原因并**响亮记日志** —— 这里钉住编码形态与失败路,不依赖真机。
-//
 // 约定同 tests/SlashHarness/SlashRegistryTests.cs:零 xunit,public static int Run() 返回失败数,
 // 由 SlashTestHarness.RunAll() 反射发现;用例必须幂等(§8.4)。
 
@@ -19,7 +15,7 @@ using RoslynProbe;
 
 namespace RoslynProbe.Tests
 {
-    /// <summary>壳层可见形态(系统行前缀 / stdio 编码)的断言套件。</summary>
+    /// <summary>壳层可见形态(系统行前缀)的断言套件。</summary>
     public static class ConsoleRenderTests
     {
         private static readonly List<string> Failures = new List<string>();
@@ -33,7 +29,6 @@ namespace RoslynProbe.Tests
             currentCase = "(none)";
 
             Case("B1 系统行：产生点单前缀 + 渲染层原样显示（曾显示 !! 双前缀）", SystemRowCases);
-            Case("B2 stdio 输出编码：UTF-8 无 BOM；赋值抛/被宿主忽略都响亮带因", StdioEncodingCases);
 
             Console.WriteLine("ConsoleRenderTests: " + (checks - Failures.Count) + "/" + checks + " 通过，"
                 + Failures.Count + " 失败");
@@ -83,46 +78,6 @@ namespace RoslynProbe.Tests
                 Check(t.StartsWith("! ", StringComparison.Ordinal) && !t.StartsWith("! ! ", StringComparison.Ordinal),
                     "quit 第 " + i + " 行的落账文本应恰好一个前缀，实际 " + Show(t));
             }
-        }
-
-        // ---------------- B2 ----------------
-
-        private static void StdioEncodingCases()
-        {
-            Encoding enc = ConsolePipe.StdioOutputEncoding;
-            Check(enc != null, "StdioOutputEncoding 不应为 null");
-            if (enc == null) return;
-
-            Check(enc.WebName == "utf-8", "stdio 输出编码应是 utf-8，实际 " + enc.WebName);
-            Check(enc.CodePage == Encoding.UTF8.CodePage, "代码页应是 " + Encoding.UTF8.CodePage + "，实际 " + enc.CodePage);
-            // 无 BOM 是本条的关键:协议首行是同步信号 ">",带 BOM 会让对端首行多出 EF BB BF 三字节。
-            Check(enc.GetPreamble().Length == 0,
-                "stdio 输出编码不得带 BOM 前导（否则首行 '>' 前多 3 字节），实际 " + enc.GetPreamble().Length + " 字节");
-            Check(enc.GetString(enc.GetBytes("中文提示")) == "中文提示", "该编码应能正确往返中文");
-
-            // 成功路:setter 收到无 BOM 的那份、复核通过 ⇒ null(无错误)。
-            Encoding captured = null;
-            string ok = ConsolePipe.TryApplyStdioOutputEncoding(e => { captured = e; }, () => Encoding.UTF8);
-            Check(ok == null, "成功路应返回 null（无错误），实际 " + Show(ok));
-            Check(object.ReferenceEquals(captured, ConsolePipe.StdioOutputEncoding),
-                "setter 收到的必须是 StdioOutputEncoding（无 BOM 的那份）");
-
-            // 失败路①:赋值抛(stdout 已关闭/被占用)⇒ 带异常类型与消息,绝不静默。
-            string thrown = ConsolePipe.TryApplyStdioOutputEncoding(
-                e => { throw new System.IO.IOException("句柄无效"); }, null);
-            Check(!string.IsNullOrEmpty(thrown) && thrown.IndexOf("IOException", StringComparison.Ordinal) >= 0
-                && thrown.IndexOf("句柄无效", StringComparison.Ordinal) >= 0,
-                "赋值抛异常应带类型与消息，实际 " + Show(thrown));
-
-            // 失败路②:赋值没抛但宿主忽略(复核值不是 UTF-8)⇒ 也要报错(不谎报成功)。
-            string ignored = ConsolePipe.TryApplyStdioOutputEncoding(e => { }, () => Encoding.ASCII);
-            Check(!string.IsNullOrEmpty(ignored) && ignored.IndexOf("忽略", StringComparison.Ordinal) >= 0,
-                "被宿主忽略时应报「忽略了赋值」，实际 " + Show(ignored));
-
-            // 边界:不要求复核 ⇒ 赋值没抛即成功;setter 为 null ⇒ 回内部错误而不是抛。
-            Check(ConsolePipe.TryApplyStdioOutputEncoding(e => { }, null) == null, "不要求复核时赋值没抛即算成功");
-            Check(!string.IsNullOrEmpty(ConsolePipe.TryApplyStdioOutputEncoding(null, null)),
-                "setter 为 null 应回内部错误而不是抛");
         }
 
         // ---------------- 断言 ----------------

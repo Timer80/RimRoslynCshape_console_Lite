@@ -1,7 +1,7 @@
 // RoslynProbe —— Slash 指令表驱动内核 + 结果帮助类。
 //
 // 零 Verse/Unity/Roslyn 依赖：本文件只依赖 BCL 与 Source/Core(ReplResult 侧)的 SlashResult。
-// 三个壳（GUI / stdio v1 / 命名管道 v2）共享这一份内核 —— 壳只负责 IsCommand 分流、
+// 两个壳（GUI / 命名管道 v2）共享这一份内核 —— 壳只负责 IsCommand 分流、
 // TryDispatch、ConsoleLog.SystemNote 落账与 quit 特殊处理（与现有 SlashCommands 完全同构）。
 //
 // 冻结声明：本文件与 SlashContext.cs 是给 13 个并行写手消费的共享 API，T-S0 交付后冻结。

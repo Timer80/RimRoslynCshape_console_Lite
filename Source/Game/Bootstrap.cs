@@ -53,31 +53,30 @@ namespace RoslynProbe
             gameObject.AddComponent<ConsoleLayer>();
             ConsoleLayer.Wire(host, executor);
 
-            // 控制台通道分派(规格 2026-10-15 §7.2,协议 v2):命中旗标才存在,零旗标零新路径。
-            // GenCommandLine 事实(反编译核实):TryGetCommandLineArg 带 '=' 命中(空 value 也 true);
-            // CommandLineArgPassed 裸/带杠、大小写不敏感均命中。因此 "RoslynConsole="(空值)会命中
-            // TryGetCommandLineArg 却不能当 v2 管道名用——选:空值视为未携带 → 走 v1 终端形态,日志一行。
-            // 决策是纯逻辑（BootstrapWiring.DecideChannel），四类情形各有离线用例。
+            // 控制台通道分派(协议 v2):命中旗标才存在,零旗标零新路径。
+            // 旗标现在**必须带值**:裸 -RoslynConsole 与 -RoslynConsole=(空值)都只告警、什么都不做
+            // —— 静默忽略会让用户以为通道开了。stdio v1 终端交互已于 2026-10-20 整体删除
+            // (裸旗标唯一的下家),与 RoslynProbe 主仓库口径一致。
+            // 决策与两条诊断都是纯逻辑（BootstrapWiring.*），各有离线用例。
             string pipeName;
             bool argHasValue = GenCommandLine.TryGetCommandLineArg("RoslynConsole", out pipeName);
-            bool argPassed = GenCommandLine.CommandLineArgPassed("RoslynConsole");
-            int channel = BootstrapWiring.DecideChannel(argHasValue, pipeName, argPassed);
+            bool bareFlagPassed = GenCommandLine.CommandLineArgPassed("RoslynConsole");
+            bool wantsPipe = BootstrapWiring.WantsPipe(argHasValue, pipeName);
 
-            if (channel == BootstrapWiring.ChannelPipe)
+            if (BootstrapWiring.BareFlagWarning(bareFlagPassed, argHasValue))
+                Log.Warning("[Roslyn] 裸 -RoslynConsole 已无意义（stdio 通道已删除），忽略；用法:-RoslynConsole=<管道名>");
+            else if (BootstrapWiring.EmptyNameWarning(argHasValue, pipeName))
+                Log.Warning("[Roslyn] -RoslynConsole= 缺管道名，忽略；用法:-RoslynConsole=<管道名>");
+
+            if (wantsPipe)
                 PipeConsole.Start(executor, host, pipeName);                      // v2:agent(命名管道)
-            else if (channel == BootstrapWiring.ChannelStdio)
-            {
-                if (argHasValue && pipeName != null && pipeName.Length == 0)
-                    Log.Warning("[Roslyn] -RoslynConsole= 空管道名,视为未携带,回退 v1 终端形态");
-                ConsolePipe.Start(executor, host);                                // v1:人(终端形态)
-            }
             // 都无:零新路径
 
             // 通道事实的**唯一安装出口**（同一个出口也供离线用例调用）—— 必须在各 Start **之后**调用。
             // F3 口径：事实位记的是「Start 已被调用（线程已起）」，**不是**「bind/可用性已确认」：
             // PipeConsole.Start 只起 accept 线程就返回，真正的 bind 在 AcceptLoop 里，失败被吞并每 ~500ms 重试
             // （同名冲突时后到者永远绑不上，而事实位仍报 pipe=开 —— 已接受的偏离，规避 = 用不同管道名）。
-            BootstrapWiring.InstallChannelFacts(channel, pipeName);
+            BootstrapWiring.InstallChannelFacts(wantsPipe, pipeName);
 
             // Append our icon to the vanilla dev toolbar. DrawButtons is private and so are
             // widgetRow / widgetRowFinalX, so the patch reaches them via AccessTools; if the
@@ -117,27 +116,25 @@ namespace RoslynProbe
     /// </summary>
     public static class BootstrapWiring
     {
-        /// <summary>通道决策：零新路径（既没有 -RoslynConsole=名，也没有裸 -RoslynConsole）。</summary>
-        public const int ChannelNone = 0;
-        /// <summary>通道决策：命名管道 v2。</summary>
-        public const int ChannelPipe = 1;
-        /// <summary>通道决策：stdio v1 终端形态。</summary>
-        public const int ChannelStdio = 2;
+        /// <summary>有非空的管道短名 ⇒ 开命名管道 v2（零新路径 = false）。纯逻辑，可离线单测。</summary>
+        public static bool WantsPipe(bool argHasValue, string pipeName)
+        {
+            return argHasValue && !string.IsNullOrEmpty(pipeName);
+        }
 
         /// <summary>
-        /// 命令行旗标 → 通道决策（纯逻辑，可离线单测）。四类情形：
-        /// <list type="bullet">
-        /// <item><description>带名（TryGetCommandLineArg 命中且有非空值）⇒ <see cref="ChannelPipe"/>；</description></item>
-        /// <item><description>空名（命中但值为空串）⇒ <see cref="ChannelStdio"/>（视为未携带，Init 另记一行 Warning）；</description></item>
-        /// <item><description>裸旗标（CommandLineArgPassed 命中）⇒ <see cref="ChannelStdio"/>；</description></item>
-        /// <item><description>两者都没给 ⇒ <see cref="ChannelNone"/>（零新路径）。</description></item>
-        /// </list>
+        /// 裸 <c>-RoslynConsole</c>（不带 "="）该不该告警。裸旗标原本指向 stdio v1 终端交互，那条
+        /// 通道已删除，所以现在它什么都不做 —— 静默会让用户以为通道开了。纯逻辑，可离线单测。
         /// </summary>
-        public static int DecideChannel(bool argHasValue, string pipeName, bool argPassed)
+        public static bool BareFlagWarning(bool bareFlagPassed, bool argHasValue)
         {
-            if (argHasValue && !string.IsNullOrEmpty(pipeName)) return ChannelPipe;
-            if (argPassed) return ChannelStdio;
-            return ChannelNone;
+            return bareFlagPassed && !argHasValue;
+        }
+
+        /// <summary><c>-RoslynConsole=</c> 带等号却给空名该不该告警。纯逻辑，可离线单测。</summary>
+        public static bool EmptyNameWarning(bool argHasValue, string pipeName)
+        {
+            return argHasValue && string.IsNullOrEmpty(pipeName);
         }
 
         /// <summary>
@@ -164,14 +161,13 @@ namespace RoslynProbe
         /// 通道事实位的**唯一安装出口**。调用方必须已调用对应通道的 Start —— 本方法只如实记
         /// 「Start 已被调用」（GUI 恒装：ConsoleLayer.Wire 在上游完成），**不**代表 bind/可用性已确认（F3）。
         /// </summary>
-        /// <param name="channel"><see cref="DecideChannel"/> 的返回值。</param>
+        /// <param name="pipe">是否启动了命名管道（<see cref="WantsPipe"/> 的返回值）。</param>
         /// <param name="shortPipeName">命令行短名（仅管道通道用；事实位存的是
         /// <see cref="PipeConsole.FullPipeName"/> 拼出的可连接全名）。</param>
-        public static void InstallChannelFacts(int channel, string shortPipeName)
+        public static void InstallChannelFacts(bool pipe, string shortPipeName)
         {
             ChannelFacts.InstallGui();
-            if (channel == ChannelPipe) ChannelFacts.InstallPipe(PipeConsole.FullPipeName(shortPipeName));
-            else if (channel == ChannelStdio) ChannelFacts.InstallStdio();
+            if (pipe) ChannelFacts.InstallPipe(PipeConsole.FullPipeName(shortPipeName));
         }
     }
 }
