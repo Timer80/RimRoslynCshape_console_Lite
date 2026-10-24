@@ -4,10 +4,8 @@
 // 断开=会话结束,重连=新会话;求值状态(usings/directives/变量)在
 // ReplHost/RoslynEngine 对象里,与连接无关,天然跨连接延续。单客户端同一
 // 时间:第二连接在内核等待队列挂起,首连接断开后被本 accept 接入。
-// 协议行:">" / "> 行" / "..." / 裸结果 / "> bye"。
-// 回显:读到非空行先打 "> " + 行(trimmed 口径,规格 §7.5:管道对端是
-// agent,mod 回显保证转录完整)。
-// Slash 分支与完整提交的判定顺序全部复用 SessionLine/SessionEval,
+// 协议行:">" / 裸结果 / "> bye"(一进一出,无续行,不回显输入)。
+// Slash 分支与逐行提交全部复用 SessionLine/SessionEval,
 // 本文件只做 IO 层(StreamReader/StreamWriter over NamedPipeServerStream)。
 //
 // quit 路径:"> bye" 后入游戏线程 Root.Shutdown()(与 v1 同款),会话循环
@@ -16,7 +14,6 @@
 using System;
 using System.IO;
 using System.IO.Pipes;
-using System.Text;
 using System.Threading;
 using RoslynProbe.Repl;
 using Verse;
@@ -81,8 +78,6 @@ namespace RoslynProbe
 
         private static void ServeSession(NamedPipeServerStream pipe, Executor executor, ReplHost host)
         {
-            // 状态(pending 累积)绑定会话:断开即丢弃,重连是新会话(规格 §7.3)。
-            var pending = new StringBuilder();
             using (var reader = new StreamReader(pipe))
             using (var writer = new StreamWriter(pipe) { AutoFlush = true })
             {
@@ -91,13 +86,7 @@ namespace RoslynProbe
                 string line;
                 while ((line = reader.ReadLine()) != null)
                 {
-                    // 回显先行(规格 §7.5):管道对端是 agent,mod 回显保证转录完整;
-                    // 与 v1 同为 trimmed 口径("> " + 行.Trim()),空行不回显(与 v1 忽略空行一致)。
-                    string echoTrimmed = (line ?? "").Trim();
-                    if (echoTrimmed.Length > 0)
-                        writer.WriteLine("> " + echoTrimmed);
-
-                    SessionAction action = SessionLine.Handle(line, pending, executor,
+                    SessionAction action = SessionLine.Handle(line, executor,
                         code => SessionEval.EnqueueEval(executor, host, code),
                         input => PipeSlashDispatch(executor, host, input),
                         trimmed => SlashCommands.IsCommand(trimmed, SlashCommands.ChannelPipe));

@@ -14,8 +14,6 @@
     <Compile Include="**\*.cs" Exclude="$(MSBuildProjectName).csproj;bin\**\*.cs;obj\**\*.cs;SlashHarness\**\*.cs" />
   </ItemGroup>
   <ItemGroup>
-    <!-- SubmissionCompleteness 在 Game/Repl(需 Roslyn);tests 仅编 Source/Core,故单独引入此文件 -->
-    <Compile Include="..\Source\Game\Repl\SubmissionCompleteness.cs" />
     <!-- SessionLine/SessionEval(协议 v2 会话分派内核,零 Verse 依赖):单文件引入 -->
     <Compile Include="..\Source\Game\Repl\SessionLine.cs" />
     <!-- SlashResult(纯数据,零依赖;SessionLine 需要其类型签名) -->
