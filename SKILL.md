@@ -1,6 +1,6 @@
 ---
 name: roslynprobe-console
-description: 当要用 RoslynProbe 控制台（RimWorld 1.7 mod 的 C# 求值加工具指令）时使用——用 -RoslynConsole=<名> 起命名管道、启动旗标与常见坑、连接名与一进一出协议、20 条指令分别做什么、以及未知与空白与 --json 的几条口径。裸 -RoslynConsole 不建通道，只告警。
+description: 当要用 RoslynProbe 控制台（RimWorld 1.7 mod 的 C# 求值加工具指令）时使用——用 -RoslynConsole=<名> 起命名管道（短名必须取自当前任务，禁止 pipe 这类通用名）、启动旗标与常见坑、连接名与一进一出协议、20 条指令分别做什么、以及未知与空白与 --json 的几条口径。裸 -RoslynConsole 不建通道，只告警。
 ---
 
 # RoslynProbe 控制台
@@ -12,6 +12,7 @@ description: 当要用 RoslynProbe 控制台（RimWorld 1.7 mod 的 C# 求值加
 ## 启动：-RoslynConsole=<名>
 
 - `-RoslynConsole=短名`：起命名管道，连接名是 `roslyn-console-短名`（这个全名就是 /status 报出来的名字）。多实例各自起名互不干扰。
+- 短名**必须取自当前任务**，见下面「管道短名」一节。这不是命名风格偏好，是防撞名的硬要求。
 - 裸 `-RoslynConsole` 与 `-RoslynConsole=`（空值）：**不建通道**，只往日志打一行告警。
 - 不给旗标：不起控制台通道，只有游戏内 GUI 控制台（`/ui open` 打开）。
 
@@ -23,6 +24,15 @@ description: 当要用 RoslynProbe 控制台（RimWorld 1.7 mod 的 C# 求值加
 | `-NoWindow` | 窗口隐藏、桌面零打扰（渲染照常） | 要看画面就去掉它 |
 | `-NoCrashDialog` | 崩溃不弹对话框 | 自动化常用 |
 | `-savedatafolder=<新目录>` | 存档目录重定向 | **ModsConfig 会一起被隔离**：新目录首次启动写的是只含原版 DLC 的默认配置，你的 mod 与前置都不在里面 ⇒ mod 不加载、管道根本不存在。启动前先把 `Config/ModsConfig.xml` 预写进该目录，`activeMods` **前置与核心一个都不能少**：`brrainz.harmony`、`ue.roslyn`、`ludeon.rimworld` + 各 DLC、本 mod `skylon.rimroslyncshapeconsole.lite`（全小写）——照抄本机正常配置最稳。另：隔离目录被反复强杀后可能卡启动（主循环不响应、求值全超时），删目录重建配置再启 |
+
+## 管道短名：用现在干的事本身，别用 pipe
+
+短名是桌面上的全局名字，不是本地变量。两个 Agent 各自 `-RoslynConsole=pipe`，抢的就是同一个 `roslyn-console-pipe`：谁连上谁不确定，指令可能落进别人的会话，别人的输出也可能被你当成自己的结果。
+
+- **短名写你在干什么**：`fixturret`、`pathperf`、`savetest`、`uiwindow`。`pipe` / `test` / `console` / `tmp` / `a` / `b` / `1` 这类什么活都能套的词都不算名字。
+- **起名之前先查重名**：`[IO.Directory]::GetFiles('\\.\pipe\') | Where-Object { $_ -match 'roslyn-console' }`（等价 PowerShell 写法 `Get-ChildItem \\.\pipe\ | Where-Object Name -match 'roslyn-console'`），已经存在同名就换一个。
+- **同一件事要开多个实例**时，用「任务名 + 区分后缀」：`fixturret-a`、`fixturret-b`；别退回到裸 `a`、`b`。
+- **已经撞上了**：先发 `/diag`（看 `pid`）或 `/status`（看 `channel`）确认这是不是自己的实例；不是就断开、改名重启。**不要在别人的实例上发 `/quit`、`/reset`、`/dev` 这类改状态的指令。**
 
 ## 自动化
 
@@ -36,7 +46,7 @@ $p=[IO.Pipes.NamedPipeClientStream]::new('.','roslyn-console-短名',[IO.Pipes.P
 
 - 短名就是启动时 -RoslynConsole=<短名> 给的名字，管道全名是 roslyn-console-<短名>。
 - 判据是行内容逐字等于大于号：首行是就绪，之后每轮结束也是一行大于号。不回显你发的原文，结果行之后紧跟一行大于号。
-- 单个管道名同一时刻只接**一个客户端**：同名第二个连接会挂起直到第一个断开，脚本收尾务必 Dispose。**多个服务端可以并行**——多个游戏实例各用不同短名（`-RoslynConsole=a`、`-RoslynConsole=b`），各连各的管道，互不干扰。
+- 单个管道名同一时刻只接**一个客户端**：同名第二个连接会挂起直到第一个断开，脚本收尾务必 Dispose。**多个服务端可以并行**，前提是各用不同的任务名短名（`-RoslynConsole=fixturret`、`-RoslynConsole=pathperf`）；`a`、`b` 这种裸名不算区分（见上面「管道短名」）。
 - `ReadLine` 是阻塞的，脚本里每条提交都必须收到收尾的那行 `>` 才继续，否则整段挂死。
 
 要反复调用，就把上面的片段包成循环：每轮读到恰好一行的 `>` 为止，再写下一行。`/quit` 会回 `> bye` 并关闭连接，游戏随后退出。
@@ -64,6 +74,8 @@ $p=[IO.Pipes.NamedPipeClientStream]::new('.','roslyn-console-短名',[IO.Pipes.P
   - **某次之后不再变化**⇒ 引擎整个停了，重启游戏。
   这不是客户端的问题；`-savedatafolder` 新建的隔离目录尤其容易踩到"默认 runInBackground=false"。
 - **启错 mod**：同程序集名、不同 packageId 的两份目录很容易混，启动参数对、协议也对，但跑的是别人的代码。日志堆栈里的源码绝对路径能反证加载的是哪一份。
+- **连到了别人的管道**：`/status` 的 `channel`、`/diag` 的 `pid` 对不上你自己拉的实例 ⇒ 短名撞了。断开、改名重启；撞名期间发出的指令已经生效了，别以为没发。
+- **同名起不来或双方互串**：`roslyn-console-<短名>` 已被在跑的实例占着，第二份用同名启动会失败，或者两边的连接落到同一个名字上。换个任务名短名就是唯一解法。
 
 ## 指令（每条一句，共 20 条）
 
