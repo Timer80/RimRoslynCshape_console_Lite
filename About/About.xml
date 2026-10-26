@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ModMetaData>
-  <packageId>skylon.RimRoslynCshape_console.lite</packageId>
-  <name>RimRoslynCshape_console(Lite)</name>
+  <packageId>skylon.RimRoslynCshapeconsole.lite</packageId>
+  <name>RimRoslynCshapeconsole(Lite)</name>
   <author>Packer.skylon</author>
-  <description>strin/strout + in-game console UI usable from main menu. </description>
+  <description>strin/strout + in-game C# console. </description>
   <supportedVersions>
     <li>1.7</li>
   </supportedVersions>
