@@ -307,7 +307,7 @@ namespace RoslynProbe.Tests
             string[] expect =
             {
                 "stage", "inGame", "loading", "mainMenuReady", "paused",
-                "ticks", "revision", "pending", "poisoned", "consoleLog",
+                "ticks", "lastTickAgoMs", "revision", "pending", "poisoned", "consoleLog",
                 "gate", "probeA", "capabilities", "channels", "ok", "retrievedAt", "channel"
             };
             foreach (string k in expect)

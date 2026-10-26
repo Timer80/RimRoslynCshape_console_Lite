@@ -137,6 +137,10 @@ namespace RoslynProbe
 
             // ---- 执行器 / 控制台缓冲（只读标量）----
             public int Ticks;
+            /// <summary>距上一次 Executor.Tick 的毫秒数（只读标量，任何线程安全）。
+            /// 持续增长 = 游戏主线程没在跑 Update（窗口失焦/最小化、暂停、加载）。
+            /// 这里只上报事实，**不做**进程内冻结判定 —— 判定归客户端。</summary>
+            public int? LastTickAgoMs;
             public int Revision;
             public int Pending;
             public bool Poisoned;
@@ -227,6 +231,8 @@ namespace RoslynProbe
             {
                 try { env.Ticks = ctx.Executor.TickCount; }
                 catch (Exception ex) { env.Failures.Add("Executor.TickCount: " + Short(ex)); }
+                try { env.LastTickAgoMs = ctx.Executor.IdleMs; }
+                catch (Exception ex) { env.Failures.Add("Executor.IdleMs: " + Short(ex)); }
                 try { env.Revision = ctx.Executor.Revision; }
                 catch (Exception ex) { env.Failures.Add("Executor.Revision: " + Short(ex)); }
                 try { env.Pending = ctx.Executor.PendingCount; }
@@ -552,6 +558,7 @@ namespace RoslynProbe
                 ["mainMenuReady"] = env.MainMenuReady,
                 ["paused"] = env.Paused,
                 ["ticks"] = env.Ticks,
+                ["lastTickAgoMs"] = env.LastTickAgoMs,
                 ["revision"] = env.Revision,
                 ["pending"] = env.Pending,
                 ["poisoned"] = env.Poisoned,
@@ -580,7 +587,9 @@ namespace RoslynProbe
             else if (missingFacts.Length > 0)
                 r.Lines.Add("[阶段] 已采样但部分事实读失败: " + missingFacts + "（点名见 [提示]）");
 
-            r.Lines.Add("[执行器] ticks=" + env.Ticks + " revision=" + env.Revision
+            r.Lines.Add("[执行器] ticks=" + env.Ticks
+                + " idle=" + (env.LastTickAgoMs.HasValue ? env.LastTickAgoMs.Value.ToString(CultureInfo.InvariantCulture) + "ms" : "?")
+                + " revision=" + env.Revision
                 + " pending=" + env.Pending + " poisoned=" + B(env.Poisoned)
                 + " consoleLog=" + (env.ConsoleLogCount < 0 ? "(不可读)" : env.ConsoleLogCount.ToString(CultureInfo.InvariantCulture)));
 

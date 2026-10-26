@@ -100,7 +100,9 @@ namespace RoslynProbe
             ReplResult r = eval(code);
 
             var outLines = new List<string>();
-            if (r.TimedOut) outLines.Add("eval timed out");
+            // 超时文案以 Error 为准：SessionEval 会区分「未执行」与「可能仍在执行」两种语义，
+            // 泛化掉就又把最关键的信息（到底跑没跑）丢了。只有上游没给明细时才回退到泛化文案。
+            if (r.TimedOut) outLines.Add(string.IsNullOrEmpty(r.Error) ? "eval timed out" : r.Error);
             else if (r.Ok) outLines.Add(r.Value == null ? "null" : r.Value.ToString());
             else outLines.Add(r.Error);
 

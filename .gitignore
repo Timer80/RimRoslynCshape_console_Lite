@@ -22,3 +22,9 @@ staging/
 .idea/
 *.user
 *.suo
+
+# ---- 调查期间的会话快照（14MB+，用完可删）----
+_scratch_session.jsonl
+
+# ---- 编辑器/系统备份文件 ----
+*~

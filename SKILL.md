@@ -22,7 +22,7 @@ description: 当要用 RoslynProbe 控制台（RimWorld 1.7 mod 的 C# 求值加
 | `-quicktest` | 跳过主菜单直接开一张随机开发者地图 | 要等地图真正就绪（`Find.CurrentMap` 非空）；加载途中别再调开图接口，否则游戏会卡在半初始化状态 |
 | `-NoWindow` | 窗口隐藏、桌面零打扰（渲染照常） | 要看画面就去掉它 |
 | `-NoCrashDialog` | 崩溃不弹对话框 | 自动化常用 |
-| `-savedatafolder=<新目录>` | 存档目录重定向 | **ModsConfig 会一起被隔离**：新目录首次启动写的是只含原版 DLC 的默认配置，你的 mod 与前置都不在里面 ⇒ mod 不加载、管道根本不存在。启动前先把 `Config/ModsConfig.xml` 预写进该目录，`activeMods` **前置与核心一个都不能少**：`brrainz.harmony`、`ue.roslyn`、`ludeon.rimworld` + 各 DLC、本 mod `skylon.rimroslyncshape_console.lite`（全小写）——照抄本机正常配置最稳。另：隔离目录被反复强杀后可能卡启动（主循环不响应、求值全超时），删目录重建配置再启 |
+| `-savedatafolder=<新目录>` | 存档目录重定向 | **ModsConfig 会一起被隔离**：新目录首次启动写的是只含原版 DLC 的默认配置，你的 mod 与前置都不在里面 ⇒ mod 不加载、管道根本不存在。启动前先把 `Config/ModsConfig.xml` 预写进该目录，`activeMods` **前置与核心一个都不能少**：`brrainz.harmony`、`ue.roslyn`、`ludeon.rimworld` + 各 DLC、本 mod `skylon.rimroslyncshapeconsole.lite`（全小写）——照抄本机正常配置最稳。另：隔离目录被反复强杀后可能卡启动（主循环不响应、求值全超时），删目录重建配置再启 |
 
 ## 自动化
 
@@ -48,12 +48,21 @@ $p=[IO.Pipes.NamedPipeClientStream]::new('.','roslyn-console-短名',[IO.Pipes.P
 
 会话是一进一出：写一行 → 把它这次提交的输出读完（读到下一行 `>`）→ 再写下一行。
 
-单条求值超时 15 秒，返回 `eval timed out`。**超时不代表没执行**：开图、遍历整张地图、写大文件这类重活经常在超时之后仍在继续，先查副作用再决定要不要重发。
+单条求值超时 15 秒。**两种超时的含义相反，只看开头的文案区分，别一律当"没跑"重发**：
+
+- `eval timed out: 游戏主线程 N 秒内没有跑过 Update（窗口失焦/最小化、游戏暂停或仍在加载）——本次提交未执行`
+  ⇒ 引擎停摆，**确实没执行**，可安全重发。判停只需 2 秒，不会让你干等 15 秒。
+- `eval timed out: …（引擎在推进，但这条提交仍未结束；可能仍在执行，先查副作用再决定是否重发）`
+  ⇒ 引擎在跑，卡的是这一条（开图、遍历整张地图、写大文件、编译大类型），**可能已经在执行**。先查副作用。
 
 ## 常见失败
 
 - **连不上**：先确认 mod 真的加载了 —— `-savedatafolder` 的 ModsConfig 坑最常见（前置/核心没写全，见上表）；再用 `/log` 看管道是否启动、名字与预期是否一致。
-- **求值全超时**：游戏线程被占住（还在加载，或已被搞成半初始化状态），不是客户端的问题。等加载结束；等不到就重启游戏。
+- **求值全超时**：先看 `/status` 的 `lastTickAgoMs`（距上次 Update 的毫秒数），它把三种情况分开：
+  - **持续增长、远大于 100**（如 5 秒后仍是几千）⇒ 游戏主线程没在跑 Update：窗口失焦/最小化、游戏暂停、或仍在加载。带 `-RoslynConsole` 启动时本 mod 已把 `runInBackground` 钉成 true（只改运行时、**不写玩家配置**），所以正常情况下失焦不再影响求值；若仍停摆，用 `-NoWindow` 起，或把游戏窗口切到前台。
+  - **很小（几十毫秒）**⇒ Update 在跑，卡的是你那条提交本身（遍历整张地图/编译大类型），等它。
+  - **某次之后不再变化**⇒ 引擎整个停了，重启游戏。
+  这不是客户端的问题；`-savedatafolder` 新建的隔离目录尤其容易踩到"默认 runInBackground=false"。
 - **启错 mod**：同程序集名、不同 packageId 的两份目录很容易混，启动参数对、协议也对，但跑的是别人的代码。日志堆栈里的源码绝对路径能反证加载的是哪一份。
 
 ## 指令（每条一句，共 20 条）
@@ -66,7 +75,7 @@ $p=[IO.Pipes.NamedPipeClientStream]::new('.','roslyn-console-短名',[IO.Pipes.P
 | `/usings remove <条目>…`（表内 `/usings-remove`） | `remove <条目>…` | 删条目 | `removed / denied / notFound` | ✅ |
 | `/reset [keepUsings]` | — | 清空会话（变量 / 类型 / 提交链） | `ok / keepUsings` | ✅ |
 | `/quit` | — | 干净退出游戏 | `ok / quit` | ✅ |
-| `/status` | — | 控制台自检（阶段 / 载荷 / 探针 / 通道 / 能力） | `stage / inGame / ticks / revision / pending / poisoned / gate / probeA / capabilities[] / channels[] / retrievedAt / channel` | — |
+| `/status` | — | 控制台自检（阶段 / 载荷 / 探针 / 通道 / 能力） | `stage / inGame / ticks / lastTickAgoMs / revision / pending / poisoned / gate / probeA / capabilities[] / channels[] / retrievedAt / channel` | — |
 | `/env [args\|waylithclr\|layer]` | `args / waylithclr / layer` | 启动参数 + `WAYLITH_*` + `WaylithClr.*` + 运行时 + 层注册 | `mode / args / flags / env / runtime / waylithClr / layer` | — |
 | `/asm [filter]` | 过滤子串 | 已加载程序集清单 | `count / total / filter / assemblies[]` | — |
 | `/types <短名>` | 短名 | 短名 → 命名空间 / 程序集候选 | `candidates[] / count / assembliesPartial` | — |

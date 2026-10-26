@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using RoslynProbe.Repl;
 using Xunit;
@@ -88,7 +89,7 @@ namespace RoslynProbe.Tests
         }
 
         [Fact]
-        public async Task MarkTimedOut_Completes_Tcs_And_Tick_Does_Not_Double_Complete()
+        public async Task MarkTimedOut_Completes_Tcs_And_Tick_Skips_Orphaned_Handler()
         {
             var executor = new Executor();
             bool handlerRan = false;
@@ -107,13 +108,62 @@ namespace RoslynProbe.Tests
             Assert.True(r.TimedOut);
             Assert.False(r.Ok);
 
-            // Tick runs the (simulated blocking) handler once; must not throw / double-complete.
+            // Tick must NOT run an already-orphaned handler：调用方已经被告知「未执行」，
+            // 之后再偷偷补跑就等于让副作用凭空发生（用户以为失败、实际已改游戏状态）。
             executor.Tick(1);
-            Assert.True(handlerRan);
+            Assert.False(handlerRan);
 
             Assert.True(req.Tcs.Task.IsCompleted);
             ReplResult r2 = await req.Tcs.Task;
             Assert.True(r2.TimedOut); // unchanged
+        }
+
+        [Fact]
+        public void IdleMs_Grows_Without_Tick_And_Resets_On_Tick()
+        {
+            var executor = new Executor();
+            executor.Tick(1);                       // 建立基准时刻（否则 IdleMs 是启动至今）
+            Assert.True(executor.IdleMs < 1000, "刚 Tick 过，IdleMs 应很小，实际 " + executor.IdleMs);
+
+            Thread.Sleep(80);
+            Assert.True(executor.IdleMs >= 50, "没有 Tick 时 IdleMs 必须增长，实际 " + executor.IdleMs);
+
+            executor.Tick(1);
+            Assert.True(executor.IdleMs < 1000, "Tick 之后 IdleMs 应回到很小，实际 " + executor.IdleMs);
+        }
+
+        [Fact]
+        public void TickInProgress_Is_True_During_Handler_And_False_After()
+        {
+            var executor = new Executor();
+            bool? seenDuring = null;
+            executor.Enqueue(() =>
+            {
+                seenDuring = executor.TickInProgress;
+                return new ReplResult { Ok = true };
+            }, 1000);
+
+            Assert.False(executor.TickInProgress);
+            executor.Tick(1);
+            Assert.True(seenDuring == true, "handler 执行期间 TickInProgress 必须为 true");
+            Assert.False(executor.TickInProgress, "Tick 返回后 TickInProgress 必须复位");
+        }
+
+        [Fact]
+        public void Tick_Skips_Orphaned_But_Still_Drains_Later_Requests()
+        {
+            var executor = new Executor();
+            bool orphanedRan = false;
+            bool laterRan = false;
+
+            ReplRequest orphan = executor.Enqueue(() => { orphanedRan = true; return new ReplResult { Ok = true }; }, 1000);
+            executor.Enqueue(() => { laterRan = true; return new ReplResult { Ok = true, Value = 1 }; }, 1000);
+
+            executor.MarkTimedOut(orphan.Id);
+
+            executor.Tick(2);
+            Assert.False(orphanedRan, "被标超时的请求不得执行");
+            Assert.True(laterRan, "同一批里的正常请求仍须执行");
         }
     }
 }

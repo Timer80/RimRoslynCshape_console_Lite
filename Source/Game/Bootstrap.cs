@@ -89,12 +89,19 @@ namespace RoslynProbe
                 // HookCommand.SharedOwner 必须与本字面量一致（/hook off 命中它时给响亮警告）。
                 var harmony = new Harmony("roslynprobe.toolbar");
                 harmony.PatchAll(typeof(Bootstrap).Assembly);
-                Log.Message("[Roslyn] Harmony patch 已应用（调试工具栏按钮，owner roslynprobe.toolbar）");
+                Log.Message("[Roslyn] Harmony patch 已应用（调试工具栏按钮 + 强制 runInBackground，owner roslynprobe.toolbar）");
             }
             catch (Exception ex)
             {
                 Log.Error("[Roslyn] Harmony patch 应用失败: " + ex);
             }
+
+            // 失焦护盾：只有走 agent 通道（-RoslynConsole=<名>）才把 runInBackground 钉在 true。
+            // 根因见 RunInBackgroundForce 文件头 —— 失焦时 Waylith 主循环会 continue 掉整帧的
+            // OnUpdate，Executor.Tick 随之停摆，管道求值只能等到 15 秒超时。
+            // 零旗标（纯 GUI，普通玩家）不启用：不改变原版行为。
+            if (wantsPipe)
+                RunInBackgroundForce.Enable();
 
             Log.Message("[Roslyn] RoslynProbe 引导完成");
         }
